@@ -7,8 +7,10 @@ setup_environment() {
     local build_dir=$2
     local index=$3
 
-    # Create profile.d script for runtime environment
-    local profile_script="${deps_dir}/.profile.d/claude-code-env.sh"
+    # Create profile.d directory in BUILD_DIR (not DEPS_DIR!)
+    # Cloud Foundry sources scripts from /home/vcap/app/.profile.d/ at runtime
+    mkdir -p "${build_dir}/.profile.d"
+    local profile_script="${build_dir}/.profile.d/claude-code-env.sh"
 
     # Use the actual index number in the script (not ${DEPS_INDEX} which may not be set at runtime)
     cat > "${profile_script}" <<EOF

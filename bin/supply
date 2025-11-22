@@ -25,8 +25,8 @@ source "${BP_DIR}/lib/validator.sh"
 # Create necessary directories
 mkdir -p "${DEPS_INDEX_DIR}/bin"
 mkdir -p "${DEPS_INDEX_DIR}/lib"
-mkdir -p "${DEPS_INDEX_DIR}/.profile.d"
 mkdir -p "${CACHE_DIR}"
+# Note: .profile.d is created in BUILD_DIR by setup_environment()
 
 echo "-----> Claude Code CLI Buildpack"
 
