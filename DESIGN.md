@@ -120,8 +120,9 @@ The buildpack should detect when:
 
 3. **Configure Authentication**
    - Read `ANTHROPIC_API_KEY` from environment or manifest
-   - Store in `/home/vcap/deps/{INDEX}/.profile.d/claude-code-env.sh`
+   - Create `.profile.d` script in `BUILD_DIR/.profile.d/` (maps to `/home/vcap/app/.profile.d/` at runtime)
    - Set up environment variables for runtime
+   - **IMPORTANT**: Scripts must be in `/home/vcap/app/.profile.d/`, NOT in deps directory
 
 4. **Configure MCP Servers**
    - Parse MCP configuration from manifest
@@ -130,7 +131,16 @@ The buildpack should detect when:
 
 5. **Create Configuration Files**
    - Generate `config.yml` in `/home/vcap/deps/{INDEX}/config.yml`
+   - **REQUIRED**: Include `name` field at root level for Java buildpack compatibility
    - Include paths, binaries, and environment setup
+   - Format:
+     ```yaml
+     name: claude-code-buildpack
+     config:
+       version: latest
+       cli_path: /home/vcap/deps/{INDEX}/bin/claude
+       node_path: /home/vcap/deps/{INDEX}/node/bin/node
+     ```
 
 #### Arguments:
 - `BUILD_DIR`: Application directory
@@ -671,6 +681,7 @@ public class HealthController {
 - Failed installations
 - Invalid configurations
 - Permission issues
+- **Missing config.yml name field**: Java buildpack finalize will fail with `NoMethodError: undefined method '[]' for nil:NilClass` if the supply buildpack doesn't create a properly formatted `config.yml` with a `name` field
 
 ### 2. Runtime Errors
 - API key issues
@@ -691,6 +702,44 @@ public class HealthController {
   "timestamp": "2025-11-22T10:30:00Z"
 }
 ```
+
+### 4. Common Buildpack Staging Errors
+
+#### NoMethodError in Java Buildpack Finalize
+**Error**: `Finalize failed with exception #<NoMethodError: undefined method '[]' for nil:NilClass>`
+
+**Cause**: The Java buildpack's finalize script expects all supply buildpacks to create a `config.yml` file in `DEPS_DIR/INDEX/` with the following structure:
+```yaml
+name: buildpack-name
+config:
+  # buildpack-specific configuration
+```
+
+**Fix**: Ensure the supply buildpack creates a properly formatted `config.yml` with the required `name` field at the root level.
+
+### 5. Common Runtime Errors
+
+#### NullPointerException when executing Claude Code from Java
+**Error**: `java.lang.NullPointerException` when calling `ProcessBuilder` with `System.getenv("CLAUDE_CLI_PATH")`, or environment variables returning `null`
+
+**Cause 1**: The `.profile.d` script was using `${DEPS_INDEX}` variable which is not available at application runtime. Cloud Foundry provides `$DEPS_DIR` at runtime, but the buildpack index must be hardcoded during the supply phase.
+
+**Fix 1**: The `setup_environment()` function now accepts the INDEX as a parameter and hardcodes it into the `.profile.d` script:
+```bash
+# Instead of: export CLAUDE_CLI_PATH="$DEPS_DIR/${DEPS_INDEX}/bin/claude"
+# Use: export CLAUDE_CLI_PATH="$DEPS_DIR/1/bin/claude"  # where 1 is the actual index
+```
+
+**Cause 2**: The `.profile.d` script was being created in the wrong directory (`DEPS_DIR/{INDEX}/.profile.d/`) instead of the application directory (`BUILD_DIR/.profile.d/`). Cloud Foundry only sources scripts from `/home/vcap/app/.profile.d/` at runtime, not from the deps directories.
+
+**Fix 2**: The `.profile.d` script is now created in `BUILD_DIR/.profile.d/` (which maps to `/home/vcap/app/.profile.d/` at runtime):
+```bash
+# Create in BUILD_DIR, not DEPS_DIR
+mkdir -p "${build_dir}/.profile.d"
+local profile_script="${build_dir}/.profile.d/claude-code-env.sh"
+```
+
+This ensures that `CLAUDE_CLI_PATH` and other environment variables are properly set at runtime and available to Java applications via `System.getenv()`.
 
 ---
 
