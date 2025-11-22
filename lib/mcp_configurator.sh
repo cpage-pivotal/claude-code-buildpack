@@ -1,6 +1,39 @@
 #!/usr/bin/env bash
 # lib/mcp_configurator.sh: MCP server configuration parsing and .claude.json generation
 
+# Parse Claude Code configuration settings from .claude-code-config.yml
+# Extracts logLevel, version, model, etc.
+parse_config_settings() {
+    local config_file=$1
+
+    if [ ! -f "${config_file}" ]; then
+        return 1
+    fi
+
+    # Parse logLevel setting
+    local log_level=$(grep -E "^\s*logLevel:" "${config_file}" | sed -E 's/^\s*logLevel:\s*(.+)\s*$/\1/' | tr -d '"' | tr -d "'")
+    if [ -n "${log_level}" ]; then
+        export CLAUDE_CODE_LOG_LEVEL="${log_level}"
+        echo "       Setting log level: ${log_level}"
+    fi
+
+    # Parse version setting
+    local version=$(grep -E "^\s*version:" "${config_file}" | sed -E 's/^\s*version:\s*(.+)\s*$/\1/' | tr -d '"' | tr -d "'")
+    if [ -n "${version}" ]; then
+        export CLAUDE_CODE_VERSION="${version}"
+        echo "       Setting Claude Code version: ${version}"
+    fi
+
+    # Parse model setting
+    local model=$(grep -E "^\s*model:" "${config_file}" | sed -E 's/^\s*model:\s*(.+)\s*$/\1/' | tr -d '"' | tr -d "'")
+    if [ -n "${model}" ]; then
+        export CLAUDE_CODE_MODEL="${model}"
+        echo "       Setting Claude Code model: ${model}"
+    fi
+
+    return 0
+}
+
 # Parse MCP server configuration from .claude-code-config.yml
 # Returns 0 if configuration found, 1 otherwise
 parse_claude_code_config() {
@@ -12,6 +45,9 @@ parse_claude_code_config() {
     fi
 
     echo "       Found .claude-code-config.yml configuration file"
+
+    # Parse configuration settings (logLevel, version, model)
+    parse_config_settings "${config_file}"
 
     # Export config file location for later parsing
     export CLAUDE_CODE_CONFIG_FILE="${config_file}"

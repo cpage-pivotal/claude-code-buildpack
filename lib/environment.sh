@@ -28,14 +28,15 @@ export CLAUDE_CLI_PATH="\$DEPS_DIR/${index}/bin/claude"
 # Set home directory for Claude configuration
 export CLAUDE_CONFIG_HOME="\$HOME"
 
-# Log level configuration (if not already set)
+# Log level configuration (from config file or default)
+# Priority: config file > environment variable > default
 if [ -z "\$CLAUDE_CODE_LOG_LEVEL" ]; then
-    export CLAUDE_CODE_LOG_LEVEL="info"
+    export CLAUDE_CODE_LOG_LEVEL="${CLAUDE_CODE_LOG_LEVEL:-info}"
 fi
 
-# Model configuration (if not already set)
+# Model configuration (from config file or default)
 if [ -z "\$CLAUDE_CODE_MODEL" ]; then
-    export CLAUDE_CODE_MODEL="sonnet"
+    export CLAUDE_CODE_MODEL="${CLAUDE_CODE_MODEL:-sonnet}"
 fi
 EOF
 

@@ -315,8 +315,76 @@ else
     assert_failure "Should generate .claude.json with HTTP remote server"
 fi
 
-# Test 15: Mixed local and remote MCP servers
-print_test_header "Test 15: Mixed local and remote MCP servers"
+# Test 15: Parse logLevel from config file
+print_test_header "Test 15: Parse logLevel from config file"
+cat > "${TEST_DIR}/.claude-code-config.yml" <<'EOF'
+claudeCode:
+  enabled: true
+  logLevel: debug
+EOF
+
+unset CLAUDE_CODE_LOG_LEVEL
+parse_config_settings "${TEST_DIR}/.claude-code-config.yml"
+if [ "${CLAUDE_CODE_LOG_LEVEL}" = "debug" ]; then
+    assert_success "Should parse logLevel setting from config file"
+else
+    assert_failure "Should parse logLevel setting from config file"
+fi
+
+# Test 16: Parse version from config file
+print_test_header "Test 16: Parse version from config file"
+cat > "${TEST_DIR}/.claude-code-config.yml" <<'EOF'
+claudeCode:
+  enabled: true
+  version: "2.0.50"
+EOF
+
+unset CLAUDE_CODE_VERSION
+parse_config_settings "${TEST_DIR}/.claude-code-config.yml"
+if [ "${CLAUDE_CODE_VERSION}" = "2.0.50" ]; then
+    assert_success "Should parse version setting from config file"
+else
+    assert_failure "Should parse version setting from config file"
+fi
+
+# Test 17: Parse model from config file
+print_test_header "Test 17: Parse model from config file"
+cat > "${TEST_DIR}/.claude-code-config.yml" <<'EOF'
+claudeCode:
+  enabled: true
+  model: opus
+EOF
+
+unset CLAUDE_CODE_MODEL
+parse_config_settings "${TEST_DIR}/.claude-code-config.yml"
+if [ "${CLAUDE_CODE_MODEL}" = "opus" ]; then
+    assert_success "Should parse model setting from config file"
+else
+    assert_failure "Should parse model setting from config file"
+fi
+
+# Test 18: Parse all settings together
+print_test_header "Test 18: Parse all settings together"
+cat > "${TEST_DIR}/.claude-code-config.yml" <<'EOF'
+claudeCode:
+  enabled: true
+  logLevel: warn
+  version: "2.1.0"
+  model: haiku
+EOF
+
+unset CLAUDE_CODE_LOG_LEVEL CLAUDE_CODE_VERSION CLAUDE_CODE_MODEL
+parse_config_settings "${TEST_DIR}/.claude-code-config.yml"
+if [ "${CLAUDE_CODE_LOG_LEVEL}" = "warn" ] && \
+   [ "${CLAUDE_CODE_VERSION}" = "2.1.0" ] && \
+   [ "${CLAUDE_CODE_MODEL}" = "haiku" ]; then
+    assert_success "Should parse all settings from config file"
+else
+    assert_failure "Should parse all settings from config file"
+fi
+
+# Test 19: Mixed local and remote MCP servers
+print_test_header "Test 19: Mixed local and remote MCP servers"
 cat > "${TEST_DIR}/.claude-code-config.yml" <<'EOF'
 claudeCode:
   enabled: true

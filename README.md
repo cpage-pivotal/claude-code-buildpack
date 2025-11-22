@@ -41,11 +41,18 @@ Create `.claude-code-config.yml` in your application root:
 ```yaml
 claudeCode:
   enabled: true
+
+  # Optional: Set log level for verbose output
+  logLevel: debug  # Options: debug, info, warn, error
+
+  # Optional: Pin to specific Claude Code version
   version: "latest"
 
-  authentication:
-    apiKey: ${ANTHROPIC_API_KEY}
+  # Optional: Set default Claude model
+  model: sonnet  # Options: sonnet, opus, haiku
 ```
+
+**Note:** You still need to set `ANTHROPIC_API_KEY` as an environment variable for security reasons.
 
 ### 3. Deploy Your Application
 
@@ -61,18 +68,52 @@ The buildpack will activate when any of the following conditions are met:
 2. `CLAUDE_CODE_ENABLED=true` environment variable is set
 3. `claude-code-enabled: true` is specified in `manifest.yml`
 
-## Environment Variables
+## Configuration
 
-### Required
+### Configuration File Settings
+
+You can configure Claude Code using `.claude-code-config.yml` in your application root:
+
+```yaml
+claudeCode:
+  enabled: true
+
+  # Log level - controls verbosity of CLI output
+  # Options: debug, info, warn, error
+  # Default: info
+  logLevel: debug
+
+  # Claude Code CLI version
+  # Default: latest
+  version: "2.0.50"
+
+  # Default Claude model to use
+  # Options: sonnet, opus, haiku
+  # Default: sonnet
+  model: sonnet
+
+  # MCP servers configuration (see MCP section below)
+  mcpServers:
+    # ...
+```
+
+**Setting Priority:** Configuration file values take precedence over environment variables, which take precedence over defaults.
+
+### Environment Variables
+
+#### Required
 
 - `ANTHROPIC_API_KEY`: Your Anthropic API key (format: `sk-ant-...`)
 
-### Optional
+#### Optional
 
 - `CLAUDE_CODE_ENABLED`: Enable/disable the buildpack (default: `false`)
 - `CLAUDE_CODE_VERSION`: Specific version to install (default: `latest`)
+  - *Can also be set in config file as `version`*
 - `CLAUDE_CODE_LOG_LEVEL`: CLI log level (default: `info`)
+  - *Can also be set in config file as `logLevel`*
 - `CLAUDE_CODE_MODEL`: Default model to use (default: `sonnet`)
+  - *Can also be set in config file as `model`*
 - `NODE_VERSION`: Node.js version for CLI (default: `20.11.0`)
 
 ## Usage in Java Applications
@@ -237,6 +278,10 @@ Create a `.claude-code-config.yml` file in your application root:
 ```yaml
 claudeCode:
   enabled: true
+
+  # Optional: Increase verbosity for debugging
+  logLevel: debug  # Options: debug, info, warn, error
+
   mcpServers:
     # Filesystem server - provides file system access
     - name: filesystem

@@ -3,7 +3,17 @@
 
 claudeCode:
   enabled: true
-  version: "latest"  # Optional: specify a specific version like "2.0.50"
+
+  # Optional: Specify Claude Code CLI version (default: "latest")
+  version: "latest"  # Or pin to specific version like "2.0.50"
+
+  # Optional: Set log level for verbose output (default: "info")
+  # Options: debug, info, warn, error
+  logLevel: debug
+
+  # Optional: Set default Claude model (default: "sonnet")
+  # Options: sonnet, opus, haiku
+  model: sonnet
 
   # MCP (Model Context Protocol) Server Configuration
   # Configure additional capabilities for Claude Code CLI

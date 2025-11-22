@@ -4,5 +4,10 @@
 claudeCode:
   enabled: true
 
+  # Optional settings (uncomment to use):
+  # logLevel: debug     # Options: debug, info, warn, error
+  # version: "latest"   # Pin to specific version if needed
+  # model: sonnet       # Options: sonnet, opus, haiku
+
   # Optional: No MCP servers configured
   # Claude Code will function normally but without additional MCP capabilities
