@@ -65,10 +65,9 @@ config:
   config_home: /home/vcap/app
 EOF
 
-    # Parse and create .claude.json if configuration exists
-    if [ -f "${build_dir}/.claude-code-config.yml" ]; then
-        parse_and_create_claude_config "${build_dir}" "${build_dir}/.claude.json"
-    fi
+    # Always create a basic .claude.json for the CLI
+    # This prevents the CLI from hanging while trying to create/find config
+    parse_and_create_claude_config "${build_dir}" "${build_dir}/.claude.json"
 }
 
 # Parse configuration and create .claude.json
