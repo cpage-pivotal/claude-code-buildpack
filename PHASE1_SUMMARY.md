@@ -27,7 +27,7 @@ Phase 1 of the Cloud Foundry Claude Code CLI Buildpack has been successfully imp
 - Claude Code CLI installation
   - Installs via npm from @anthropic-ai/claude-code
   - Supports version pinning or latest
-  - Creates convenient symlinks
+  - npm automatically creates bin/claude symlink
   - Verifies successful installation
 
 #### lib/environment.sh

@@ -116,7 +116,7 @@ The buildpack should detect when:
 2. **Install Claude Code CLI**
    - Execute: `npm install -g @anthropic-ai/claude-code`
    - Install location: `/home/vcap/deps/{INDEX}/bin/claude`
-   - Create symlink to make accessible in PATH
+   - npm automatically creates symlink at install time
 
 3. **Configure Authentication**
    - Read `ANTHROPIC_API_KEY` from environment or manifest
