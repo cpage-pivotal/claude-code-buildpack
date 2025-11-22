@@ -1,0 +1,49 @@
+---
+# Sample .claude-code-config.yml
+# Place this file in your application root to enable Claude Code buildpack
+
+claudeCode:
+  # Enable Claude Code CLI installation
+  enabled: true
+
+  # Claude Code CLI version
+  # Use "latest" for the newest version, or specify a version like "2.0.50"
+  version: "latest"
+
+  # Authentication
+  authentication:
+    # API key - references the ANTHROPIC_API_KEY environment variable
+    # It's recommended to set this via environment variables for security
+    apiKey: ${ANTHROPIC_API_KEY}
+
+  # CLI behavior settings
+  settings:
+    logLevel: "info"          # debug, info, warn, error
+    model: "sonnet"            # sonnet, opus, haiku
+    outputFormat: "text"       # text, json
+
+  # MCP (Model Context Protocol) Servers
+  # Note: Full MCP configuration will be implemented in Phase 2
+  # For now, this is a placeholder for future functionality
+  mcpServers: []
+
+  # Example MCP servers (will be implemented in Phase 2):
+  #
+  # mcpServers:
+  #   - name: filesystem
+  #     type: stdio
+  #     command: npx
+  #     args:
+  #       - "-y"
+  #       - "@modelcontextprotocol/server-filesystem"
+  #     env:
+  #       ALLOWED_DIRECTORIES: "/home/vcap/app,/tmp"
+  #
+  #   - name: github
+  #     type: stdio
+  #     command: npx
+  #     args:
+  #       - "-y"
+  #       - "@modelcontextprotocol/server-github"
+  #     env:
+  #       GITHUB_PERSONAL_ACCESS_TOKEN: ${GITHUB_TOKEN}
