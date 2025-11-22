@@ -59,45 +59,125 @@ cf ssh my-java-app
 
 ## Step 5: Use in Your Java Code
 
-### Basic Example
+### Basic Example (Correct Pattern)
 
 ```java
-String claudePath = System.getenv("CLAUDE_CLI_PATH");
+import java.io.*;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
-ProcessBuilder pb = new ProcessBuilder(
-    claudePath,
-    "-p", "What is the capital of France?",
-    "--dangerously-skip-permissions"
-);
+public String executeClaudeCode(String prompt) throws Exception {
+    ProcessBuilder pb = new ProcessBuilder(
+        System.getenv("CLAUDE_CLI_PATH"),
+        "-p", prompt,
+        "--dangerously-skip-permissions"
+    );
 
-pb.environment().put("ANTHROPIC_API_KEY", System.getenv("ANTHROPIC_API_KEY"));
+    // Pass environment variables to subprocess
+    Map<String, String> env = pb.environment();
+    env.put("ANTHROPIC_API_KEY", System.getenv("ANTHROPIC_API_KEY"));
+    env.put("HOME", System.getenv("HOME"));
 
-Process process = pb.start();
+    // Redirect stderr to stdout (prevents buffer deadlock)
+    pb.redirectErrorStream(true);
 
-BufferedReader reader = new BufferedReader(
-    new InputStreamReader(process.getInputStream())
-);
+    Process process = pb.start();
 
-String line;
-while ((line = reader.readLine()) != null) {
-    System.out.println(line);
+    // CRITICAL: Close stdin so CLI doesn't wait for input
+    process.getOutputStream().close();
+
+    // Read output
+    StringBuilder output = new StringBuilder();
+    try (BufferedReader reader = new BufferedReader(
+            new InputStreamReader(process.getInputStream()))) {
+        String line;
+        while ((line = reader.readLine()) != null) {
+            output.append(line).append("\n");
+            System.out.println(line);
+        }
+    }
+
+    // Wait with timeout
+    boolean finished = process.waitFor(3, TimeUnit.MINUTES);
+    if (!finished) {
+        process.destroyForcibly();
+        throw new RuntimeException("Process timed out");
+    }
+
+    // Check exit code
+    if (process.exitValue() != 0) {
+        throw new RuntimeException("Process failed: " + process.exitValue());
+    }
+
+    return output.toString();
 }
-
-process.waitFor();
 ```
 
-### Streaming Example
+### Spring Boot REST Controller Example
 
 ```java
-Stream<String> stream = new BufferedReader(
-    new InputStreamReader(process.getInputStream())
-).lines();
+@RestController
+@RequestMapping("/api/claude")
+public class ClaudeController {
 
-stream.forEach(line -> {
-    // Process each line as it arrives
-    logger.info("Claude: {}", line);
-});
+    @GetMapping("/ask")
+    public ResponseEntity<String> ask(@RequestParam String question) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder(
+                System.getenv("CLAUDE_CLI_PATH"),
+                "-p", question,
+                "--dangerously-skip-permissions"
+            );
+
+            Map<String, String> env = pb.environment();
+            env.put("ANTHROPIC_API_KEY", System.getenv("ANTHROPIC_API_KEY"));
+            env.put("HOME", System.getenv("HOME"));
+
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            process.getOutputStream().close();
+
+            StringBuilder output = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line).append("\n");
+                }
+            }
+
+            boolean finished = process.waitFor(3, TimeUnit.MINUTES);
+            if (!finished) {
+                process.destroyForcibly();
+                return ResponseEntity.status(HttpStatus.REQUEST_TIMEOUT)
+                    .body("Request timed out");
+            }
+
+            if (process.exitValue() != 0) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Claude Code failed");
+            }
+
+            return ResponseEntity.ok(output.toString());
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("Error: " + e.getMessage());
+        }
+    }
+}
 ```
+
+### ⚠️ Critical Requirements
+
+Your code **MUST** include these steps or it will hang:
+
+1. ✅ **Close stdin**: `process.getOutputStream().close()`
+2. ✅ **Redirect stderr**: `pb.redirectErrorStream(true)`
+3. ✅ **Pass API key**: Add to `pb.environment()`
+4. ✅ **Use timeout**: `process.waitFor(3, TimeUnit.MINUTES)`
+
+**Without these, your process will timeout after 2 minutes!**
 
 ## Common Issues
 

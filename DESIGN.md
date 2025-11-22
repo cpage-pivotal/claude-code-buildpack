@@ -256,60 +256,96 @@ public interface ClaudeCodeExecutor {
 
 // Implementation
 public class ClaudeCodeExecutorImpl implements ClaudeCodeExecutor {
+    private static final Logger logger = LoggerFactory.getLogger(ClaudeCodeExecutorImpl.class);
     private final String claudePath;
     private final Map<String, String> environment;
-    
+
     public ClaudeCodeExecutorImpl() {
         this.claudePath = System.getenv("CLAUDE_CLI_PATH");
+        if (claudePath == null) {
+            throw new IllegalStateException("CLAUDE_CLI_PATH not set");
+        }
         this.environment = buildEnvironment();
     }
-    
+
     @Override
-    public Stream<String> executeStreaming(String prompt) {
+    public String execute(String prompt) {
         ProcessBuilder pb = new ProcessBuilder(
             claudePath,
             "-p", prompt,
-            "--dangerously-skip-permissions",
-            "--output-format", "text"
+            "--dangerously-skip-permissions"
         );
-        
+
+        // Add environment variables to subprocess
         pb.environment().putAll(environment);
+
+        // CRITICAL: Redirect stderr to stdout so we only read one stream
         pb.redirectErrorStream(true);
-        
+
         try {
             Process process = pb.start();
-            BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getInputStream())
-            );
-            
-            return reader.lines().onClose(() -> {
-                try {
-                    process.waitFor();
-                    reader.close();
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
+
+            // CRITICAL: Close stdin so the CLI doesn't wait for input
+            process.getOutputStream().close();
+
+            // Read output
+            StringBuilder output = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line).append("\n");
+                    logger.debug("Claude output: {}", line);
                 }
-            });
-        } catch (IOException e) {
+            }
+
+            // Wait for process to complete with timeout
+            boolean finished = process.waitFor(3, TimeUnit.MINUTES);
+            if (!finished) {
+                logger.error("Claude Code timed out");
+                process.destroyForcibly();
+                throw new TimeoutException("Claude Code execution timed out");
+            }
+
+            int exitCode = process.exitValue();
+            if (exitCode != 0) {
+                throw new RuntimeException("Claude Code failed with exit code: " + exitCode);
+            }
+
+            return output.toString();
+
+        } catch (IOException | InterruptedException | TimeoutException e) {
             throw new RuntimeException("Failed to execute Claude Code", e);
         }
     }
-    
+
     @Override
-    public String execute(String prompt) {
-        return executeStreaming(prompt)
-            .collect(Collectors.joining("\n"));
+    public Stream<String> executeStreaming(String prompt) {
+        // For streaming, execute and split into lines
+        return Arrays.stream(execute(prompt).split("\n"));
     }
-    
+
     @Override
     public CompletableFuture<String> executeAsync(String prompt) {
         return CompletableFuture.supplyAsync(() -> execute(prompt));
     }
-    
+
     private Map<String, String> buildEnvironment() {
         Map<String, String> env = new HashMap<>();
-        env.put("ANTHROPIC_API_KEY", System.getenv("ANTHROPIC_API_KEY"));
-        env.put("HOME", System.getProperty("user.home"));
+
+        // CRITICAL: Pass API key to subprocess
+        String apiKey = System.getenv("ANTHROPIC_API_KEY");
+        if (apiKey == null || apiKey.isEmpty()) {
+            throw new IllegalStateException("ANTHROPIC_API_KEY not set");
+        }
+        env.put("ANTHROPIC_API_KEY", apiKey);
+
+        // Pass HOME directory
+        String home = System.getenv("HOME");
+        if (home != null) {
+            env.put("HOME", home);
+        }
+
         return env;
     }
 }
@@ -348,7 +384,7 @@ public class ClaudeCodeController {
 @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
 public Flux<ServerSentEvent<String>> streamClaudeOutput(
     @RequestParam String prompt) {
-    
+
     return Flux.fromStream(executor.executeStreaming(prompt))
         .map(line -> ServerSentEvent.<String>builder()
             .data(line)
@@ -356,6 +392,84 @@ public Flux<ServerSentEvent<String>> streamClaudeOutput(
         .doOnError(e -> log.error("Streaming error", e))
         .doFinally(signal -> log.info("Stream completed"));
 }
+```
+
+### 4. Critical ProcessBuilder Best Practices
+
+When using `ProcessBuilder` to invoke Claude Code CLI, you **must** follow these patterns to avoid hangs and timeouts:
+
+#### ✅ DO - Correct Pattern
+```java
+ProcessBuilder pb = new ProcessBuilder(
+    System.getenv("CLAUDE_CLI_PATH"),
+    "-p", "your prompt here",
+    "--dangerously-skip-permissions"
+);
+
+// 1. Pass environment variables to subprocess
+Map<String, String> env = pb.environment();
+env.put("ANTHROPIC_API_KEY", System.getenv("ANTHROPIC_API_KEY"));
+env.put("HOME", System.getenv("HOME"));
+
+// 2. Redirect stderr to stdout (prevents buffer deadlock)
+pb.redirectErrorStream(true);
+
+Process process = pb.start();
+
+// 3. CRITICAL: Close stdin immediately
+process.getOutputStream().close();
+
+// 4. Read output
+StringBuilder output = new StringBuilder();
+try (BufferedReader reader = new BufferedReader(
+        new InputStreamReader(process.getInputStream()))) {
+    String line;
+    while ((line = reader.readLine()) != null) {
+        output.append(line).append("\n");
+    }
+}
+
+// 5. Wait with timeout
+boolean finished = process.waitFor(3, TimeUnit.MINUTES);
+if (!finished) {
+    process.destroyForcibly();
+    throw new TimeoutException("Process timed out");
+}
+
+// 6. Check exit code
+if (process.exitValue() != 0) {
+    throw new RuntimeException("Process failed");
+}
+```
+
+#### ❌ DON'T - Common Mistakes
+
+**Mistake 1: Not closing stdin**
+```java
+Process process = pb.start();
+// Missing: process.getOutputStream().close();
+// Result: CLI hangs waiting for input
+```
+
+**Mistake 2: Not redirecting stderr**
+```java
+pb.start();  // Missing: pb.redirectErrorStream(true);
+// Result: stderr buffer fills up, process blocks
+```
+
+**Mistake 3: Not passing API key to subprocess**
+```java
+// Checking key in parent process
+if (System.getenv("ANTHROPIC_API_KEY") != null) {
+    // But NOT adding it to pb.environment()!
+}
+// Result: CLI can't authenticate, hangs or fails
+```
+
+**Mistake 4: No timeout**
+```java
+process.waitFor();  // Waits forever if process hangs
+// Should be: process.waitFor(3, TimeUnit.MINUTES);
 ```
 
 ---

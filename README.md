@@ -82,41 +82,148 @@ After deployment, the Claude Code CLI is available at the path specified in the 
 ### Basic Example
 
 ```java
-ProcessBuilder pb = new ProcessBuilder(
-    System.getenv("CLAUDE_CLI_PATH"),
-    "-p", "Explain this code",
-    "--dangerously-skip-permissions"
-);
+import java.io.*;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
-Process process = pb.start();
-BufferedReader reader = new BufferedReader(
-    new InputStreamReader(process.getInputStream())
-);
+public class ClaudeExample {
+    public static String executeClaudeCode(String prompt) throws Exception {
+        ProcessBuilder pb = new ProcessBuilder(
+            System.getenv("CLAUDE_CLI_PATH"),
+            "-p", prompt,
+            "--dangerously-skip-permissions"
+        );
 
-String line;
-while ((line = reader.readLine()) != null) {
-    System.out.println(line);
+        // Pass environment variables to subprocess
+        Map<String, String> env = pb.environment();
+        env.put("ANTHROPIC_API_KEY", System.getenv("ANTHROPIC_API_KEY"));
+        env.put("HOME", System.getenv("HOME"));
+
+        // Redirect stderr to stdout to avoid buffer deadlock
+        pb.redirectErrorStream(true);
+
+        Process process = pb.start();
+
+        // CRITICAL: Close stdin so CLI doesn't wait for input
+        process.getOutputStream().close();
+
+        // Read output
+        StringBuilder output = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(process.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
+                System.out.println(line);
+            }
+        }
+
+        // Wait for process with timeout
+        boolean finished = process.waitFor(3, TimeUnit.MINUTES);
+        if (!finished) {
+            process.destroyForcibly();
+            throw new RuntimeException("Process timed out");
+        }
+
+        // Check exit code
+        if (process.exitValue() != 0) {
+            throw new RuntimeException("Process failed with exit code: " + process.exitValue());
+        }
+
+        return output.toString();
+    }
 }
 ```
+
+### Spring Boot REST Endpoint Example
+
+```java
+@RestController
+@RequestMapping("/api/claude")
+public class ClaudeController {
+
+    @GetMapping("/execute")
+    public ResponseEntity<String> execute(@RequestParam String prompt) {
+        try {
+            String result = executeClaudeCode(prompt);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("Error: " + e.getMessage());
+        }
+    }
+
+    private String executeClaudeCode(String prompt) throws Exception {
+        ProcessBuilder pb = new ProcessBuilder(
+            System.getenv("CLAUDE_CLI_PATH"),
+            "-p", prompt,
+            "--dangerously-skip-permissions"
+        );
+
+        Map<String, String> env = pb.environment();
+        env.put("ANTHROPIC_API_KEY", System.getenv("ANTHROPIC_API_KEY"));
+        env.put("HOME", System.getenv("HOME"));
+
+        pb.redirectErrorStream(true);
+        Process process = pb.start();
+        process.getOutputStream().close();  // Close stdin
+
+        StringBuilder output = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(process.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
+            }
+        }
+
+        boolean finished = process.waitFor(3, TimeUnit.MINUTES);
+        if (!finished) {
+            process.destroyForcibly();
+            throw new RuntimeException("Timeout");
+        }
+
+        if (process.exitValue() != 0) {
+            throw new RuntimeException("Failed with exit code: " + process.exitValue());
+        }
+
+        return output.toString();
+    }
+}
+```
+
+### Critical Requirements
+
+When using `ProcessBuilder` to invoke Claude Code:
+
+1. **✅ DO close stdin**: `process.getOutputStream().close()`
+2. **✅ DO redirect stderr**: `pb.redirectErrorStream(true)`
+3. **✅ DO pass API key**: Add `ANTHROPIC_API_KEY` to subprocess environment
+4. **✅ DO use timeout**: `process.waitFor(3, TimeUnit.MINUTES)`
+
+Without these, your process will hang or timeout!
 
 ## Installation Directory Structure
 
 ```
-/home/vcap/deps/{INDEX}/
-├── bin/
-│   └── claude              # Claude Code CLI symlink
-├── node/
-│   ├── bin/
-│   │   ├── node
-│   │   └── npm
-│   └── lib/
-├── lib/
-│   └── node_modules/
-│       └── @anthropic-ai/
-│           └── claude-code/
-├── .profile.d/
-│   └── claude-code-env.sh  # Runtime environment setup
-└── config.yml              # Buildpack configuration
+/home/vcap/
+├── app/                        # Application directory
+│   ├── .profile.d/
+│   │   └── claude-code-env.sh  # Runtime environment setup
+│   └── .claude.json            # Claude Code configuration
+└── deps/{INDEX}/               # Buildpack dependencies
+    ├── bin/
+    │   └── claude              # Claude Code CLI symlink
+    ├── node/
+    │   ├── bin/
+    │   │   ├── node
+    │   │   └── npm
+    │   └── lib/
+    ├── lib/
+    │   └── node_modules/
+    │       └── @anthropic-ai/
+    │           └── claude-code/
+    └── config.yml              # Buildpack configuration
 ```
 
 ## Development
