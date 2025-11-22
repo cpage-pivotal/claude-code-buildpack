@@ -267,6 +267,94 @@ else
     assert_success "Should fail when no mcpServers section exists"
 fi
 
+# Test 13: Remote MCP server with SSE transport
+print_test_header "Test 13: Remote MCP server with SSE transport"
+cat > "${TEST_DIR}/.claude-code-config.yml" <<'EOF'
+claudeCode:
+  enabled: true
+  mcpServers:
+    - name: remote-sse-server
+      type: sse
+      url: "https://mcp.example.com/api/sse"
+      env:
+        API_TOKEN: "test-token-123"
+EOF
+
+rm -f "${TEST_DIR}/.claude.json"
+generate_claude_json "${TEST_DIR}"
+if [ -f "${TEST_DIR}/.claude.json" ] && \
+   grep -q '"remote-sse-server"' "${TEST_DIR}/.claude.json" && \
+   grep -q '"type": "sse"' "${TEST_DIR}/.claude.json" && \
+   grep -q '"url": "https://mcp.example.com/api/sse"' "${TEST_DIR}/.claude.json"; then
+    assert_success "Should generate .claude.json with SSE remote server"
+else
+    assert_failure "Should generate .claude.json with SSE remote server"
+fi
+
+# Test 14: Remote MCP server with HTTP transport
+print_test_header "Test 14: Remote MCP server with HTTP transport"
+cat > "${TEST_DIR}/.claude-code-config.yml" <<'EOF'
+claudeCode:
+  enabled: true
+  mcpServers:
+    - name: remote-http-server
+      type: http
+      url: "https://api.example.com/mcp/endpoint"
+      env:
+        GATEWAY_TOKEN: "Bearer xyz789"
+EOF
+
+rm -f "${TEST_DIR}/.claude.json"
+generate_claude_json "${TEST_DIR}"
+if [ -f "${TEST_DIR}/.claude.json" ] && \
+   grep -q '"remote-http-server"' "${TEST_DIR}/.claude.json" && \
+   grep -q '"type": "http"' "${TEST_DIR}/.claude.json" && \
+   grep -q '"url": "https://api.example.com/mcp/endpoint"' "${TEST_DIR}/.claude.json"; then
+    assert_success "Should generate .claude.json with HTTP remote server"
+else
+    assert_failure "Should generate .claude.json with HTTP remote server"
+fi
+
+# Test 15: Mixed local and remote MCP servers
+print_test_header "Test 15: Mixed local and remote MCP servers"
+cat > "${TEST_DIR}/.claude-code-config.yml" <<'EOF'
+claudeCode:
+  enabled: true
+  mcpServers:
+    - name: filesystem
+      type: stdio
+      command: npx
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-filesystem"
+      env:
+        ALLOWED_DIRECTORIES: "/tmp"
+    - name: remote-data
+      type: sse
+      url: "https://data.example.com/mcp"
+      env:
+        DATA_KEY: "abc123"
+    - name: llm-gateway
+      type: http
+      url: "https://llm.example.com/api"
+      env:
+        LLM_TOKEN: "xyz789"
+EOF
+
+rm -f "${TEST_DIR}/.claude.json"
+generate_claude_json "${TEST_DIR}"
+if [ -f "${TEST_DIR}/.claude.json" ] && \
+   grep -q '"filesystem"' "${TEST_DIR}/.claude.json" && \
+   grep -q '"remote-data"' "${TEST_DIR}/.claude.json" && \
+   grep -q '"llm-gateway"' "${TEST_DIR}/.claude.json" && \
+   grep -q '"type": "stdio"' "${TEST_DIR}/.claude.json" && \
+   grep -q '"type": "sse"' "${TEST_DIR}/.claude.json" && \
+   grep -q '"type": "http"' "${TEST_DIR}/.claude.json"; then
+    assert_success "Should generate .claude.json with mixed local and remote servers"
+else
+    assert_failure "Should generate .claude.json with mixed local and remote servers"
+fi
+
 # Print summary
 echo ""
 echo "======================================"

@@ -271,7 +271,9 @@ claudeCode:
 
 ### Available MCP Servers
 
-The following MCP servers are commonly used:
+#### Local MCP Servers (stdio transport)
+
+The following MCP servers run as local processes:
 
 | Server | Package | Description |
 |--------|---------|-------------|
@@ -280,6 +282,14 @@ The following MCP servers are commonly used:
 | **postgres** | `@modelcontextprotocol/server-postgres` | PostgreSQL database access |
 | **sequential-thinking** | `@modelcontextprotocol/server-sequential-thinking` | Complex reasoning capabilities |
 | **brave-search** | `@modelcontextprotocol/server-brave-search` | Web search integration |
+
+#### Remote MCP Servers (SSE/HTTP transport)
+
+Remote MCP servers can be hosted anywhere and accessed via:
+- **SSE (Server-Sent Events)**: For streaming updates and real-time data
+- **HTTP**: For request/response interactions with streaming support
+
+See `examples/.claude-code-config-remote-mcp.yml` for detailed configuration examples.
 
 ### Environment Variable Substitution
 
@@ -329,11 +339,39 @@ During staging, the buildpack parses `.claude-code-config.yml` and generates `.c
 
 This file is placed in `/home/vcap/app/.claude.json` and used by the Claude Code CLI at runtime.
 
+### Remote MCP Servers
+
+In addition to local stdio-based MCP servers, Claude Code supports remote MCP servers using SSE and HTTP transports:
+
+```yaml
+mcpServers:
+  # SSE (Server-Sent Events) Transport
+  - name: remote-data-service
+    type: sse
+    url: "https://mcp.example.com/api/data/sse"
+    env:
+      API_TOKEN: "${DATA_SERVICE_TOKEN}"
+
+  # Streamable HTTP Transport
+  - name: llm-gateway
+    type: http
+    url: "https://llm-gateway.example.com/mcp"
+    env:
+      GATEWAY_TOKEN: "${LLM_GATEWAY_TOKEN}"
+```
+
+**Remote Server Requirements**:
+- Must implement the MCP protocol specification
+- Must use HTTPS for security
+- Should support authentication via headers or environment variables
+- Must be accessible from Cloud Foundry (check security groups)
+
 ### Example Configurations
 
 See the `examples/` directory for complete configuration examples:
 
-- `examples/.claude-code-config.yml` - Full featured example with multiple MCP servers
+- `examples/.claude-code-config.yml` - Full featured example with local (stdio) MCP servers
+- `examples/.claude-code-config-remote-mcp.yml` - Remote MCP servers with SSE and HTTP transports
 - `examples/.claude-code-config-minimal.yml` - Minimal configuration without MCP servers
 
 ## Development

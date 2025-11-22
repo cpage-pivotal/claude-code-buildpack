@@ -107,13 +107,20 @@ for line in lines:
 
     # Parse server properties
     if current_server is not None:
-        # Type
+        # Type (stdio, sse, http)
         if re.match(r'type:', stripped):
             match = re.search(r'type:\s*(.+)', stripped)
             if match:
                 current_server['type'] = match.group(1).strip()
 
-        # Command
+        # URL (for remote servers: sse, http)
+        elif re.match(r'url:', stripped):
+            match = re.search(r'url:\s*(.+)', stripped)
+            if match:
+                url = match.group(1).strip().strip('"')
+                current_server['url'] = url
+
+        # Command (for local servers: stdio)
         elif re.match(r'command:', stripped):
             match = re.search(r'command:\s*(.+)', stripped)
             if match:
