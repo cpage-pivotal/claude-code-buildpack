@@ -44,7 +44,7 @@ install_claude_code "${DEPS_INDEX_DIR}" "${CACHE_DIR}"
 
 # Set up environment variables
 echo "       Configuring environment..."
-setup_environment "${DEPS_INDEX_DIR}" "${BUILD_DIR}"
+setup_environment "${DEPS_INDEX_DIR}" "${BUILD_DIR}" "${INDEX}"
 
 # Create configuration files
 echo "       Creating configuration files..."

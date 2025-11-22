@@ -716,6 +716,21 @@ config:
 
 **Fix**: Ensure the supply buildpack creates a properly formatted `config.yml` with the required `name` field at the root level.
 
+### 5. Common Runtime Errors
+
+#### NullPointerException when executing Claude Code from Java
+**Error**: `java.lang.NullPointerException` when calling `ProcessBuilder` with `System.getenv("CLAUDE_CLI_PATH")`
+
+**Cause**: The `.profile.d` script was using `${DEPS_INDEX}` variable which is not available at application runtime. Cloud Foundry provides `$DEPS_DIR` at runtime, but the buildpack index must be hardcoded during the supply phase.
+
+**Fix**: The `setup_environment()` function now accepts the INDEX as a parameter and hardcodes it into the `.profile.d` script:
+```bash
+# Instead of: export CLAUDE_CLI_PATH="$DEPS_DIR/${DEPS_INDEX}/bin/claude"
+# Use: export CLAUDE_CLI_PATH="$DEPS_DIR/1/bin/claude"  # where 1 is the actual index
+```
+
+This ensures that `CLAUDE_CLI_PATH` is properly set at runtime and available to Java applications via `System.getenv()`.
+
 ---
 
 ## Dependencies

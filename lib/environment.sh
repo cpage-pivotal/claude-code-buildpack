@@ -5,32 +5,34 @@
 setup_environment() {
     local deps_dir=$1
     local build_dir=$2
+    local index=$3
 
     # Create profile.d script for runtime environment
     local profile_script="${deps_dir}/.profile.d/claude-code-env.sh"
 
-    cat > "${profile_script}" <<'EOF'
+    # Use the actual index number in the script (not ${DEPS_INDEX} which may not be set at runtime)
+    cat > "${profile_script}" <<EOF
 # Claude Code CLI environment configuration
 
 # Add Claude Code to PATH
-export PATH="$DEPS_DIR/${DEPS_INDEX}/bin:$PATH"
+export PATH="\$DEPS_DIR/${index}/bin:\$PATH"
 
 # Add Node.js to PATH
-export PATH="$DEPS_DIR/${DEPS_INDEX}/node/bin:$PATH"
+export PATH="\$DEPS_DIR/${index}/node/bin:\$PATH"
 
 # Set Claude CLI path for Java applications
-export CLAUDE_CLI_PATH="$DEPS_DIR/${DEPS_INDEX}/bin/claude"
+export CLAUDE_CLI_PATH="\$DEPS_DIR/${index}/bin/claude"
 
 # Set home directory for Claude configuration
-export CLAUDE_CONFIG_HOME="$HOME"
+export CLAUDE_CONFIG_HOME="\$HOME"
 
 # Log level configuration (if not already set)
-if [ -z "$CLAUDE_CODE_LOG_LEVEL" ]; then
+if [ -z "\$CLAUDE_CODE_LOG_LEVEL" ]; then
     export CLAUDE_CODE_LOG_LEVEL="info"
 fi
 
 # Model configuration (if not already set)
-if [ -z "$CLAUDE_CODE_MODEL" ]; then
+if [ -z "\$CLAUDE_CODE_MODEL" ]; then
     export CLAUDE_CODE_MODEL="sonnet"
 fi
 EOF
