@@ -82,11 +82,8 @@ install_claude_code() {
         return 1
     fi
 
-    # Create symlink in bin directory for easier access
-    ln -sf "${npm_prefix}/lib/node_modules/@anthropic-ai/claude-code/bin/claude.js" \
-           "${install_dir}/bin/claude"
-
-    chmod +x "${install_dir}/bin/claude"
+    # npm install -g automatically creates the bin/claude symlink
+    # No need to create it manually or chmod it
 
     echo "       Claude Code CLI installed successfully"
     return 0
