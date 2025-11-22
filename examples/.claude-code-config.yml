@@ -15,6 +15,9 @@ claudeCode:
   # Options: sonnet, opus, haiku
   model: sonnet
 
+  # NOTE: API key is set via ANTHROPIC_API_KEY environment variable
+  # Do NOT include an "authentication:" section - it's not needed and may cause confusion
+
   # MCP (Model Context Protocol) Server Configuration
   # Configure additional capabilities for Claude Code CLI
   mcpServers:

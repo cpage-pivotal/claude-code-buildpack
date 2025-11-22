@@ -98,7 +98,7 @@ extract_mcp_servers() {
 
     # Use Python for YAML parsing (available in Cloud Foundry stacks)
     if command -v python3 > /dev/null 2>&1; then
-        python3 - "${config_file}" <<'PYTHON_SCRIPT' > "${output_file}"
+        python3 - "${config_file}" <<'PYTHON_SCRIPT' > "${output_file}" 2>&1
 import sys
 import re
 import json
@@ -111,8 +111,9 @@ config_file = sys.argv[1]
 try:
     with open(config_file, 'r') as f:
         lines = f.readlines()
-except:
-    sys.exit(1)
+except Exception as e:
+    print(json.dumps({'mcpServers': {}}))
+    sys.exit(0)
 
 mcp_servers = {}
 in_mcp = False
@@ -129,11 +130,13 @@ for line in lines:
         in_mcp = True
         continue
 
-    # Detect start of new server
+    # Detect start of new server (with or without inline name)
     if in_mcp and re.match(r'-\s+name:', stripped):
+        # Save previous server
         if current_server and current_server_name:
             mcp_servers[current_server_name] = current_server
 
+        # Start new server
         match = re.search(r'name:\s*(.+)', stripped)
         current_server_name = match.group(1).strip() if match else None
         current_server = {}
@@ -141,53 +144,59 @@ for line in lines:
         in_env = False
         continue
 
-    # Parse server properties
+    # Parse server properties (only when we have a current server)
     if current_server is not None:
         # Type (stdio, sse, http)
-        if re.match(r'type:', stripped):
+        if re.match(r'^\s*type:', line):
             match = re.search(r'type:\s*(.+)', stripped)
             if match:
                 current_server['type'] = match.group(1).strip()
 
         # URL (for remote servers: sse, http)
-        elif re.match(r'url:', stripped):
+        elif re.match(r'^\s*url:', line):
             match = re.search(r'url:\s*(.+)', stripped)
             if match:
                 url = match.group(1).strip().strip('"')
                 current_server['url'] = url
 
         # Command (for local servers: stdio)
-        elif re.match(r'command:', stripped):
+        elif re.match(r'^\s*command:', line):
             match = re.search(r'command:\s*(.+)', stripped)
             if match:
                 current_server['command'] = match.group(1).strip()
 
         # Args array
-        elif re.match(r'args:', stripped):
+        elif re.match(r'^\s*args:', line):
             current_server['args'] = []
             in_args = True
             in_env = False
-        elif in_args and re.match(r'-\s+"', stripped):
-            match = re.search(r'-\s+"([^"]+)"', stripped)
-            if match:
-                current_server['args'].append(match.group(1))
-        elif in_args and not re.match(r'-', stripped) and re.match(r'[a-zA-Z_]+:', stripped):
-            in_args = False
+
+        elif in_args:
+            if re.match(r'^\s+-\s+"', line):
+                match = re.search(r'-\s+"([^"]+)"', stripped)
+                if match:
+                    current_server['args'].append(match.group(1))
+            elif re.match(r'^\s*[a-zA-Z_]+:', line):
+                # Exit args section
+                in_args = False
 
         # Env object
-        if re.match(r'env:', stripped):
+        if re.match(r'^\s*env:', line) and not in_args:
             current_server['env'] = {}
             in_env = True
             in_args = False
-        elif in_env and re.match(r'[A-Z_]+:', stripped):
+
+        elif in_env and re.match(r'^\s+[A-Z_]+:', line):
             match = re.search(r'([A-Z_]+):\s*(.+)', stripped)
             if match:
                 key = match.group(1).strip()
-                value = match.group(2).strip().strip('"')
+                value = match.group(2).strip().strip('"').strip("'")
+                # Handle environment variable substitution syntax
                 current_server['env'][key] = value
 
-    # Exit MCP section if we hit a non-indented line
-    if in_mcp and not line.startswith((' ', '\t', '-')) and stripped and not re.match(r'(mcpServers|mcp-servers):', stripped):
+    # Detect end of MCP section
+    # Exit if we hit a non-indented, non-empty line that's not a comment and not a dash
+    if in_mcp and line and not line.startswith((' ', '\t', '-', '#')) and stripped:
         in_mcp = False
 
 # Add last server
@@ -272,7 +281,7 @@ validate_mcp_config() {
     fi
 
     # Check if mcpServers has any servers configured
-    local server_count=$(grep -c '"type"' "${config_file}" || echo "0")
+    local server_count=$(grep -c '"type"' "${config_file}" 2>/dev/null || echo "0")
 
     if [ "${server_count}" -eq 0 ]; then
         echo "       No MCP servers configured (using empty configuration)"
