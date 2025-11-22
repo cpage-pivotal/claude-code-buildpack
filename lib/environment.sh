@@ -52,7 +52,8 @@ create_config_files() {
 
     cat > "${config_file}" <<EOF
 ---
-claude-code:
+name: claude-code-buildpack
+config:
   version: ${CLAUDE_CODE_VERSION:-latest}
   cli_path: ${deps_dir}/bin/claude
   node_path: ${deps_dir}/node/bin/node

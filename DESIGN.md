@@ -130,7 +130,16 @@ The buildpack should detect when:
 
 5. **Create Configuration Files**
    - Generate `config.yml` in `/home/vcap/deps/{INDEX}/config.yml`
+   - **REQUIRED**: Include `name` field at root level for Java buildpack compatibility
    - Include paths, binaries, and environment setup
+   - Format:
+     ```yaml
+     name: claude-code-buildpack
+     config:
+       version: latest
+       cli_path: /home/vcap/deps/{INDEX}/bin/claude
+       node_path: /home/vcap/deps/{INDEX}/node/bin/node
+     ```
 
 #### Arguments:
 - `BUILD_DIR`: Application directory
@@ -671,6 +680,7 @@ public class HealthController {
 - Failed installations
 - Invalid configurations
 - Permission issues
+- **Missing config.yml name field**: Java buildpack finalize will fail with `NoMethodError: undefined method '[]' for nil:NilClass` if the supply buildpack doesn't create a properly formatted `config.yml` with a `name` field
 
 ### 2. Runtime Errors
 - API key issues
@@ -691,6 +701,20 @@ public class HealthController {
   "timestamp": "2025-11-22T10:30:00Z"
 }
 ```
+
+### 4. Common Buildpack Staging Errors
+
+#### NoMethodError in Java Buildpack Finalize
+**Error**: `Finalize failed with exception #<NoMethodError: undefined method '[]' for nil:NilClass>`
+
+**Cause**: The Java buildpack's finalize script expects all supply buildpacks to create a `config.yml` file in `DEPS_DIR/INDEX/` with the following structure:
+```yaml
+name: buildpack-name
+config:
+  # buildpack-specific configuration
+```
+
+**Fix**: Ensure the supply buildpack creates a properly formatted `config.yml` with the required `name` field at the root level.
 
 ---
 
