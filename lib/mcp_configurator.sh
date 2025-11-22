@@ -98,7 +98,8 @@ extract_mcp_servers() {
 
     # Use Python for YAML parsing (available in Cloud Foundry stacks)
     if command -v python3 > /dev/null 2>&1; then
-        python3 - "${config_file}" <<'PYTHON_SCRIPT' > "${output_file}" 2>&1
+        # Run Python parser - stdout goes to file, stderr goes to console
+        python3 - "${config_file}" > "${output_file}" <<'PYTHON_SCRIPT'
 import sys
 import re
 import json
