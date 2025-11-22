@@ -1,0 +1,8 @@
+# Minimal Claude Code Configuration Example
+# This creates an empty MCP configuration - Claude Code will work without any MCP servers
+
+claudeCode:
+  enabled: true
+
+  # Optional: No MCP servers configured
+  # Claude Code will function normally but without additional MCP capabilities

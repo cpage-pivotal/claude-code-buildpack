@@ -1,0 +1,68 @@
+# Example Claude Code Configuration File for Cloud Foundry
+# Place this file in the root of your application directory
+
+claudeCode:
+  enabled: true
+  version: "latest"  # Optional: specify a specific version like "2.0.50"
+
+  # MCP (Model Context Protocol) Server Configuration
+  # Configure additional capabilities for Claude Code CLI
+  mcpServers:
+
+    # Filesystem server - provides file system access
+    - name: filesystem
+      type: stdio
+      command: npx
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-filesystem"
+      env:
+        # Restrict filesystem access to specific directories
+        ALLOWED_DIRECTORIES: "/home/vcap/app,/tmp"
+
+    # GitHub server - provides GitHub API integration
+    - name: github
+      type: stdio
+      command: npx
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-github"
+      env:
+        # Set your GitHub Personal Access Token
+        # Best practice: use environment variable substitution
+        GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
+
+    # PostgreSQL server - provides database access
+    - name: postgres
+      type: stdio
+      command: npx
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-postgres"
+      env:
+        # Connection string can reference Cloud Foundry service bindings
+        POSTGRES_CONNECTION_STRING: "${POSTGRES_URL}"
+
+    # Sequential Thinking server - enables complex reasoning
+    - name: sequential-thinking
+      type: stdio
+      command: npx
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-sequential-thinking"
+
+    # Brave Search server - enables web search capabilities
+    - name: brave-search
+      type: stdio
+      command: npx
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-brave-search"
+      env:
+        BRAVE_API_KEY: "${BRAVE_API_KEY}"
+
+# Notes:
+# 1. Environment variables (${VAR_NAME}) are resolved at runtime
+# 2. All MCP servers are optional - include only what you need
+# 3. MCP servers run as separate processes spawned by Claude Code CLI
+# 4. Ensure API keys and credentials are set via Cloud Foundry environment variables

@@ -10,7 +10,7 @@ This buildpack installs the Claude Code CLI and Node.js runtime into your Cloud 
 
 - 🚀 Automated installation of Node.js and Claude Code CLI
 - 🔐 Secure API key management via environment variables
-- 🔌 MCP (Model Context Protocol) server support (Phase 2)
+- 🔌 MCP (Model Context Protocol) server support ✅
 - ☕ Java wrapper library for easy integration (Phase 3)
 - 📡 Real-time streaming output support
 - 💾 Intelligent caching for faster builds
@@ -226,6 +226,116 @@ Without these, your process will hang or timeout!
     └── config.yml              # Buildpack configuration
 ```
 
+## MCP (Model Context Protocol) Server Configuration
+
+Claude Code supports MCP servers to extend its capabilities with additional tools and integrations. The buildpack automatically generates a `.claude.json` configuration file from your `.claude-code-config.yml`.
+
+### Configuring MCP Servers
+
+Create a `.claude-code-config.yml` file in your application root:
+
+```yaml
+claudeCode:
+  enabled: true
+  mcpServers:
+    # Filesystem server - provides file system access
+    - name: filesystem
+      type: stdio
+      command: npx
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-filesystem"
+      env:
+        ALLOWED_DIRECTORIES: "/home/vcap/app,/tmp"
+
+    # GitHub server - provides GitHub API integration
+    - name: github
+      type: stdio
+      command: npx
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-github"
+      env:
+        GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
+
+    # PostgreSQL server - provides database access
+    - name: postgres
+      type: stdio
+      command: npx
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-postgres"
+      env:
+        POSTGRES_CONNECTION_STRING: "${POSTGRES_URL}"
+```
+
+### Available MCP Servers
+
+The following MCP servers are commonly used:
+
+| Server | Package | Description |
+|--------|---------|-------------|
+| **filesystem** | `@modelcontextprotocol/server-filesystem` | File system operations |
+| **github** | `@modelcontextprotocol/server-github` | GitHub API integration |
+| **postgres** | `@modelcontextprotocol/server-postgres` | PostgreSQL database access |
+| **sequential-thinking** | `@modelcontextprotocol/server-sequential-thinking` | Complex reasoning capabilities |
+| **brave-search** | `@modelcontextprotocol/server-brave-search` | Web search integration |
+
+### Environment Variable Substitution
+
+MCP server environment variables support Cloud Foundry environment variable substitution:
+
+```yaml
+mcpServers:
+  - name: github
+    type: stdio
+    command: npx
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-github"
+    env:
+      # ${VAR_NAME} is replaced at runtime with the CF environment variable
+      GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
+```
+
+Set the environment variables in your manifest:
+
+```yaml
+applications:
+- name: my-app
+  env:
+    GITHUB_TOKEN: ghp_xxxxxxxxxxxxx
+    POSTGRES_URL: postgresql://localhost/mydb
+```
+
+### Generated Configuration
+
+During staging, the buildpack parses `.claude-code-config.yml` and generates `.claude.json`:
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+      "env": {
+        "ALLOWED_DIRECTORIES": "/home/vcap/app,/tmp"
+      }
+    }
+  }
+}
+```
+
+This file is placed in `/home/vcap/app/.claude.json` and used by the Claude Code CLI at runtime.
+
+### Example Configurations
+
+See the `examples/` directory for complete configuration examples:
+
+- `examples/.claude-code-config.yml` - Full featured example with multiple MCP servers
+- `examples/.claude-code-config-minimal.yml` - Minimal configuration without MCP servers
+
 ## Development
 
 ### Prerequisites
@@ -313,16 +423,20 @@ cf logs my-app --recent
 
 ## Roadmap
 
-### Phase 1: Core Buildpack ✅ (Current)
+### Phase 1: Core Buildpack ✅ Complete
 - [x] Basic detection and supply scripts
 - [x] Node.js installation
 - [x] Claude Code CLI installation
 - [x] Environment variable handling
+- [x] Unit tests and documentation
 
-### Phase 2: Configuration Management (Planned)
-- [ ] MCP server configuration
-- [ ] `.claude.json` generation
-- [ ] Advanced configuration parsing
+### Phase 2: Configuration Management ✅ Complete
+- [x] MCP server configuration parsing
+- [x] `.claude.json` generation from YAML
+- [x] Python-based YAML parser
+- [x] Configuration validation
+- [x] Unit tests (12 tests passing)
+- [x] Documentation and examples
 
 ### Phase 3: Java Integration (Planned)
 - [ ] Java wrapper library
