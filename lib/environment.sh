@@ -28,14 +28,15 @@ export CLAUDE_CLI_PATH="\$DEPS_DIR/${index}/bin/claude"
 # Set home directory for Claude configuration
 export CLAUDE_CONFIG_HOME="\$HOME"
 
-# Log level configuration (if not already set)
+# Log level configuration (from config file or default)
+# Priority: config file > environment variable > default
 if [ -z "\$CLAUDE_CODE_LOG_LEVEL" ]; then
-    export CLAUDE_CODE_LOG_LEVEL="info"
+    export CLAUDE_CODE_LOG_LEVEL="${CLAUDE_CODE_LOG_LEVEL:-info}"
 fi
 
-# Model configuration (if not already set)
+# Model configuration (from config file or default)
 if [ -z "\$CLAUDE_CODE_MODEL" ]; then
-    export CLAUDE_CODE_MODEL="sonnet"
+    export CLAUDE_CODE_MODEL="${CLAUDE_CODE_MODEL:-sonnet}"
 fi
 EOF
 
@@ -65,27 +66,8 @@ config:
   config_home: /home/vcap/app
 EOF
 
-    # Always create a basic .claude.json for the CLI
-    # This prevents the CLI from hanging while trying to create/find config
-    parse_and_create_claude_config "${build_dir}" "${build_dir}/.claude.json"
-}
-
-# Parse configuration and create .claude.json
-parse_and_create_claude_config() {
-    local build_dir=$1
-    local output_file=$2
-
-    # This is a simplified implementation
-    # In a production buildpack, you'd use a proper YAML parser
-
-    # For now, create a basic .claude.json template
-    cat > "${output_file}" <<'EOF'
-{
-  "mcpServers": {}
-}
-EOF
-
-    echo "       Note: MCP server configuration will be enhanced in Phase 2"
+    # Note: .claude.json is now created by the MCP configurator (lib/mcp_configurator.sh)
+    # See configure_mcp_servers() function for MCP server configuration
 }
 
 # Get Claude Code version (if needed for other scripts)

@@ -21,6 +21,7 @@ DEPS_INDEX_DIR="${DEPS_DIR}/${INDEX}"
 source "${BP_DIR}/lib/environment.sh"
 source "${BP_DIR}/lib/installer.sh"
 source "${BP_DIR}/lib/validator.sh"
+source "${BP_DIR}/lib/mcp_configurator.sh"
 
 # Create necessary directories
 mkdir -p "${DEPS_INDEX_DIR}/bin"
@@ -49,6 +50,9 @@ setup_environment "${DEPS_INDEX_DIR}" "${BUILD_DIR}" "${INDEX}"
 # Create configuration files
 echo "       Creating configuration files..."
 create_config_files "${DEPS_INDEX_DIR}" "${BUILD_DIR}"
+
+# Configure MCP servers
+configure_mcp_servers "${BUILD_DIR}"
 
 # Verify installation
 echo "       Verifying installation..."

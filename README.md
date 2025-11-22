@@ -10,7 +10,7 @@ This buildpack installs the Claude Code CLI and Node.js runtime into your Cloud 
 
 - 🚀 Automated installation of Node.js and Claude Code CLI
 - 🔐 Secure API key management via environment variables
-- 🔌 MCP (Model Context Protocol) server support (Phase 2)
+- 🔌 MCP (Model Context Protocol) server support ✅
 - ☕ Java wrapper library for easy integration (Phase 3)
 - 📡 Real-time streaming output support
 - 💾 Intelligent caching for faster builds
@@ -41,11 +41,18 @@ Create `.claude-code-config.yml` in your application root:
 ```yaml
 claudeCode:
   enabled: true
+
+  # Optional: Set log level for verbose output
+  logLevel: debug  # Options: debug, info, warn, error
+
+  # Optional: Pin to specific Claude Code version
   version: "latest"
 
-  authentication:
-    apiKey: ${ANTHROPIC_API_KEY}
+  # Optional: Set default Claude model
+  model: sonnet  # Options: sonnet, opus, haiku
 ```
+
+**Note:** You still need to set `ANTHROPIC_API_KEY` as an environment variable for security reasons.
 
 ### 3. Deploy Your Application
 
@@ -61,18 +68,52 @@ The buildpack will activate when any of the following conditions are met:
 2. `CLAUDE_CODE_ENABLED=true` environment variable is set
 3. `claude-code-enabled: true` is specified in `manifest.yml`
 
-## Environment Variables
+## Configuration
 
-### Required
+### Configuration File Settings
+
+You can configure Claude Code using `.claude-code-config.yml` in your application root:
+
+```yaml
+claudeCode:
+  enabled: true
+
+  # Log level - controls verbosity of CLI output
+  # Options: debug, info, warn, error
+  # Default: info
+  logLevel: debug
+
+  # Claude Code CLI version
+  # Default: latest
+  version: "2.0.50"
+
+  # Default Claude model to use
+  # Options: sonnet, opus, haiku
+  # Default: sonnet
+  model: sonnet
+
+  # MCP servers configuration (see MCP section below)
+  mcpServers:
+    # ...
+```
+
+**Setting Priority:** Configuration file values take precedence over environment variables, which take precedence over defaults.
+
+### Environment Variables
+
+#### Required
 
 - `ANTHROPIC_API_KEY`: Your Anthropic API key (format: `sk-ant-...`)
 
-### Optional
+#### Optional
 
 - `CLAUDE_CODE_ENABLED`: Enable/disable the buildpack (default: `false`)
 - `CLAUDE_CODE_VERSION`: Specific version to install (default: `latest`)
+  - *Can also be set in config file as `version`*
 - `CLAUDE_CODE_LOG_LEVEL`: CLI log level (default: `info`)
+  - *Can also be set in config file as `logLevel`*
 - `CLAUDE_CODE_MODEL`: Default model to use (default: `sonnet`)
+  - *Can also be set in config file as `model`*
 - `NODE_VERSION`: Node.js version for CLI (default: `20.11.0`)
 
 ## Usage in Java Applications
@@ -226,6 +267,158 @@ Without these, your process will hang or timeout!
     └── config.yml              # Buildpack configuration
 ```
 
+## MCP (Model Context Protocol) Server Configuration
+
+Claude Code supports MCP servers to extend its capabilities with additional tools and integrations. The buildpack automatically generates a `.claude.json` configuration file from your `.claude-code-config.yml`.
+
+### Configuring MCP Servers
+
+Create a `.claude-code-config.yml` file in your application root:
+
+```yaml
+claudeCode:
+  enabled: true
+
+  # Optional: Increase verbosity for debugging
+  logLevel: debug  # Options: debug, info, warn, error
+
+  mcpServers:
+    # Filesystem server - provides file system access
+    - name: filesystem
+      type: stdio
+      command: npx
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-filesystem"
+      env:
+        ALLOWED_DIRECTORIES: "/home/vcap/app,/tmp"
+
+    # GitHub server - provides GitHub API integration
+    - name: github
+      type: stdio
+      command: npx
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-github"
+      env:
+        GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
+
+    # PostgreSQL server - provides database access
+    - name: postgres
+      type: stdio
+      command: npx
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-postgres"
+      env:
+        POSTGRES_CONNECTION_STRING: "${POSTGRES_URL}"
+```
+
+### Available MCP Servers
+
+#### Local MCP Servers (stdio transport)
+
+The following MCP servers run as local processes:
+
+| Server | Package | Description |
+|--------|---------|-------------|
+| **filesystem** | `@modelcontextprotocol/server-filesystem` | File system operations |
+| **github** | `@modelcontextprotocol/server-github` | GitHub API integration |
+| **postgres** | `@modelcontextprotocol/server-postgres` | PostgreSQL database access |
+| **sequential-thinking** | `@modelcontextprotocol/server-sequential-thinking` | Complex reasoning capabilities |
+| **brave-search** | `@modelcontextprotocol/server-brave-search` | Web search integration |
+
+#### Remote MCP Servers (SSE/HTTP transport)
+
+Remote MCP servers can be hosted anywhere and accessed via:
+- **SSE (Server-Sent Events)**: For streaming updates and real-time data
+- **HTTP**: For request/response interactions with streaming support
+
+See `examples/.claude-code-config-remote-mcp.yml` for detailed configuration examples.
+
+### Environment Variable Substitution
+
+MCP server environment variables support Cloud Foundry environment variable substitution:
+
+```yaml
+mcpServers:
+  - name: github
+    type: stdio
+    command: npx
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-github"
+    env:
+      # ${VAR_NAME} is replaced at runtime with the CF environment variable
+      GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
+```
+
+Set the environment variables in your manifest:
+
+```yaml
+applications:
+- name: my-app
+  env:
+    GITHUB_TOKEN: ghp_xxxxxxxxxxxxx
+    POSTGRES_URL: postgresql://localhost/mydb
+```
+
+### Generated Configuration
+
+During staging, the buildpack parses `.claude-code-config.yml` and generates `.claude.json`:
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+      "env": {
+        "ALLOWED_DIRECTORIES": "/home/vcap/app,/tmp"
+      }
+    }
+  }
+}
+```
+
+This file is placed in `/home/vcap/app/.claude.json` and used by the Claude Code CLI at runtime.
+
+### Remote MCP Servers
+
+In addition to local stdio-based MCP servers, Claude Code supports remote MCP servers using SSE and HTTP transports:
+
+```yaml
+mcpServers:
+  # SSE (Server-Sent Events) Transport
+  - name: remote-data-service
+    type: sse
+    url: "https://mcp.example.com/api/data/sse"
+    env:
+      API_TOKEN: "${DATA_SERVICE_TOKEN}"
+
+  # Streamable HTTP Transport
+  - name: llm-gateway
+    type: http
+    url: "https://llm-gateway.example.com/mcp"
+    env:
+      GATEWAY_TOKEN: "${LLM_GATEWAY_TOKEN}"
+```
+
+**Remote Server Requirements**:
+- Must implement the MCP protocol specification
+- Must use HTTPS for security
+- Should support authentication via headers or environment variables
+- Must be accessible from Cloud Foundry (check security groups)
+
+### Example Configurations
+
+See the `examples/` directory for complete configuration examples:
+
+- `examples/.claude-code-config.yml` - Full featured example with local (stdio) MCP servers
+- `examples/.claude-code-config-remote-mcp.yml` - Remote MCP servers with SSE and HTTP transports
+- `examples/.claude-code-config-minimal.yml` - Minimal configuration without MCP servers
+
 ## Development
 
 ### Prerequisites
@@ -313,16 +506,20 @@ cf logs my-app --recent
 
 ## Roadmap
 
-### Phase 1: Core Buildpack ✅ (Current)
+### Phase 1: Core Buildpack ✅ Complete
 - [x] Basic detection and supply scripts
 - [x] Node.js installation
 - [x] Claude Code CLI installation
 - [x] Environment variable handling
+- [x] Unit tests and documentation
 
-### Phase 2: Configuration Management (Planned)
-- [ ] MCP server configuration
-- [ ] `.claude.json` generation
-- [ ] Advanced configuration parsing
+### Phase 2: Configuration Management ✅ Complete
+- [x] MCP server configuration parsing
+- [x] `.claude.json` generation from YAML
+- [x] Python-based YAML parser
+- [x] Configuration validation
+- [x] Unit tests (12 tests passing)
+- [x] Documentation and examples
 
 ### Phase 3: Java Integration (Planned)
 - [ ] Java wrapper library

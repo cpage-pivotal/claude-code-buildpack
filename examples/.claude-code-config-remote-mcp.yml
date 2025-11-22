@@ -1,0 +1,181 @@
+# Example Claude Code Configuration with Remote MCP Servers
+# Demonstrates SSE and Streamable HTTP transport configurations
+
+claudeCode:
+  enabled: true
+
+  # Optional: Specify version
+  version: "latest"
+
+  # Optional: Set log level for debugging remote connections
+  # Use "debug" to see detailed MCP server connection logs
+  logLevel: debug
+
+  # Optional: Set default model
+  model: sonnet
+
+  mcpServers:
+    # ========================================
+    # SSE (Server-Sent Events) Transport
+    # ========================================
+    # SSE is useful for servers that need to stream updates to the client
+    # The server must implement the MCP SSE protocol
+
+    - name: remote-data-service
+      type: sse
+      url: "https://mcp.example.com/api/data/sse"
+      env:
+        # Authentication token for the remote service
+        API_TOKEN: "${DATA_SERVICE_TOKEN}"
+        # Optional: Custom headers can be passed via environment
+        CUSTOM_HEADER: "X-Client-ID: ${CLIENT_ID}"
+
+    - name: analytics-server
+      type: sse
+      url: "https://analytics.example.com/mcp/events"
+      env:
+        ANALYTICS_API_KEY: "${ANALYTICS_KEY}"
+        # Environment-specific configuration
+        ENVIRONMENT: "${CF_ENVIRONMENT}"
+
+    # ========================================
+    # Streamable HTTP Transport
+    # ========================================
+    # HTTP transport for request/response MCP servers
+    # Supports streaming responses over HTTP
+
+    - name: llm-gateway
+      type: http
+      url: "https://llm-gateway.example.com/mcp"
+      env:
+        GATEWAY_TOKEN: "${LLM_GATEWAY_TOKEN}"
+        # Optional timeout configuration (in milliseconds)
+        REQUEST_TIMEOUT: "30000"
+
+    - name: document-processor
+      type: http
+      url: "https://docs.example.com/api/mcp/v1"
+      env:
+        PROCESSOR_API_KEY: "${DOC_PROCESSOR_KEY}"
+        # Optional: Rate limiting configuration
+        MAX_REQUESTS_PER_MINUTE: "100"
+
+    - name: cloud-storage-mcp
+      type: http
+      url: "https://storage-api.example.com/mcp/endpoint"
+      env:
+        STORAGE_ACCESS_TOKEN: "${CLOUD_STORAGE_TOKEN}"
+        BUCKET_NAME: "${STORAGE_BUCKET}"
+        REGION: "us-east-1"
+
+    # ========================================
+    # Mixed Configuration Example
+    # Combining local (stdio) and remote (SSE/HTTP) servers
+    # ========================================
+
+    # Local filesystem access (stdio)
+    - name: filesystem
+      type: stdio
+      command: npx
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-filesystem"
+      env:
+        ALLOWED_DIRECTORIES: "/home/vcap/app,/tmp"
+
+    # Remote AI service (SSE)
+    - name: ai-completion-service
+      type: sse
+      url: "https://ai.example.com/mcp/completions/stream"
+      env:
+        AI_SERVICE_KEY: "${AI_API_KEY}"
+        MODEL_VERSION: "v2"
+
+    # Remote database proxy (HTTP)
+    - name: database-proxy
+      type: http
+      url: "https://db-proxy.example.com/mcp"
+      env:
+        DB_PROXY_TOKEN: "${DATABASE_PROXY_TOKEN}"
+        CONNECTION_POOL_SIZE: "10"
+
+# ========================================
+# Cloud Foundry Environment Variables
+# ========================================
+# Set these in your manifest.yml or via cf set-env:
+#
+# applications:
+# - name: my-app
+#   env:
+#     # SSE server credentials
+#     DATA_SERVICE_TOKEN: "sst_xxxxxxxxxxxxx"
+#     ANALYTICS_KEY: "ak_xxxxxxxxxxxxx"
+#     CLIENT_ID: "client-12345"
+#
+#     # HTTP server credentials
+#     LLM_GATEWAY_TOKEN: "Bearer xxxxxxxxxxxxx"
+#     DOC_PROCESSOR_KEY: "dpk_xxxxxxxxxxxxx"
+#     CLOUD_STORAGE_TOKEN: "cst_xxxxxxxxxxxxx"
+#     STORAGE_BUCKET: "my-app-storage"
+#
+#     # AI service credentials
+#     AI_API_KEY: "sk-xxxxxxxxxxxxx"
+#
+#     # Database proxy
+#     DATABASE_PROXY_TOKEN: "dbt_xxxxxxxxxxxxx"
+#
+#     # Environment identification
+#     CF_ENVIRONMENT: "production"
+
+# ========================================
+# Security Considerations
+# ========================================
+# 1. Always use HTTPS URLs for remote MCP servers
+# 2. Store credentials in Cloud Foundry environment variables
+# 3. Never commit API keys or tokens to version control
+# 4. Use ${VAR_NAME} syntax for environment variable substitution
+# 5. Consider using Cloud Foundry user-provided services for credentials
+# 6. Implement proper authentication on the remote MCP server side
+# 7. Use Cloud Foundry security groups to restrict outbound traffic
+
+# ========================================
+# Remote MCP Server Requirements
+# ========================================
+# Your remote MCP server must:
+# 1. Implement the MCP protocol specification
+# 2. Support the chosen transport type (SSE or HTTP)
+# 3. Handle authentication via headers or query parameters
+# 4. Return responses in the correct MCP format
+# 5. Support CORS if accessed from browser contexts
+# 6. Implement proper error handling and status codes
+
+# ========================================
+# Example Remote Server URLs
+# ========================================
+# SSE endpoints typically end with /sse or /events or /stream
+# HTTP endpoints typically end with /mcp or /api/mcp
+#
+# SSE example: https://api.example.com/mcp/v1/sse
+# HTTP example: https://api.example.com/mcp/v1/endpoint
+
+# ========================================
+# Troubleshooting Remote MCP Servers
+# ========================================
+# 1. Verify the remote server is accessible from Cloud Foundry
+#    - Check security groups: cf security-groups
+#    - Test connectivity: cf ssh my-app -c "curl https://remote-server.com"
+#
+# 2. Verify authentication tokens are set correctly
+#    - Check environment: cf env my-app
+#    - Ensure ${VAR_NAME} variables are defined
+#
+# 3. Check Claude Code logs for connection errors
+#    - cf logs my-app --recent | grep claude
+#
+# 4. Verify the remote server supports the MCP protocol
+#    - Test with curl or similar tools
+#    - Check server documentation
+#
+# 5. Monitor for rate limiting or quota issues
+#    - Check remote server response headers
+#    - Implement retry logic if needed
