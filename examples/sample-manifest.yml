@@ -1,0 +1,37 @@
+---
+# Sample Cloud Foundry Application Manifest
+# This demonstrates how to use the Claude Code buildpack with a Java application
+
+applications:
+- name: my-java-app
+  memory: 1G
+  instances: 1
+
+  # Buildpack chain: Node.js (for Claude Code) -> Claude Code -> Java
+  buildpacks:
+    - nodejs_buildpack              # Required for Claude Code CLI
+    - claude-code-buildpack         # This buildpack
+    - java_buildpack                # Final buildpack for Java app
+
+  # Required environment variables
+  env:
+    # Claude Code Configuration
+    ANTHROPIC_API_KEY: sk-ant-xxxxxxxxxxxxx  # Replace with your API key
+    CLAUDE_CODE_ENABLED: true
+
+    # Optional: Claude Code settings
+    CLAUDE_CODE_VERSION: latest              # or specific version like "2.0.50"
+    CLAUDE_CODE_LOG_LEVEL: info              # debug, info, warn, error
+    CLAUDE_CODE_MODEL: sonnet                 # sonnet, opus, haiku
+
+    # Optional: Node.js version
+    NODE_VERSION: 20.11.0
+
+  # Optional: Health check configuration
+  health-check-type: http
+  health-check-http-endpoint: /health
+
+  # Optional: Service bindings
+  # services:
+  #   - my-postgres-db
+  #   - my-redis-cache

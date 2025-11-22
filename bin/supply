@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# bin/supply: Supply script for Claude Code buildpack
+# Installs Node.js and Claude Code CLI into the container
+
+set -e
+set -o pipefail
+
+# Arguments
+BUILD_DIR=$1
+CACHE_DIR=$2
+DEPS_DIR=$3
+INDEX=$4
+
+# Buildpack directory
+BP_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+
+# Dependency installation directory
+DEPS_INDEX_DIR="${DEPS_DIR}/${INDEX}"
+
+# Source helper libraries
+source "${BP_DIR}/lib/environment.sh"
+source "${BP_DIR}/lib/installer.sh"
+source "${BP_DIR}/lib/validator.sh"
+
+# Create necessary directories
+mkdir -p "${DEPS_INDEX_DIR}/bin"
+mkdir -p "${DEPS_INDEX_DIR}/lib"
+mkdir -p "${DEPS_INDEX_DIR}/.profile.d"
+mkdir -p "${CACHE_DIR}"
+
+echo "-----> Claude Code CLI Buildpack"
+
+# Validate environment
+echo "       Validating environment..."
+validate_environment "${BUILD_DIR}"
+
+# Install Node.js
+echo "       Installing Node.js..."
+install_nodejs "${DEPS_INDEX_DIR}" "${CACHE_DIR}"
+
+# Install Claude Code CLI
+echo "       Installing Claude Code CLI..."
+install_claude_code "${DEPS_INDEX_DIR}" "${CACHE_DIR}"
+
+# Set up environment variables
+echo "       Configuring environment..."
+setup_environment "${DEPS_INDEX_DIR}" "${BUILD_DIR}"
+
+# Create configuration files
+echo "       Creating configuration files..."
+create_config_files "${DEPS_INDEX_DIR}" "${BUILD_DIR}"
+
+# Verify installation
+echo "       Verifying installation..."
+verify_installation "${DEPS_INDEX_DIR}"
+
+echo "       Claude Code CLI installed successfully!"
+echo "       Version: $(get_claude_version "${DEPS_INDEX_DIR}")"

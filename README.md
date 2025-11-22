@@ -1,0 +1,251 @@
+# Claude Code CLI Buildpack for Cloud Foundry
+
+A Cloud Foundry supply buildpack that bundles the Claude Code CLI into Java application containers, enabling AI-assisted coding capabilities in production environments.
+
+## Overview
+
+This buildpack installs the Claude Code CLI and Node.js runtime into your Cloud Foundry application container, allowing your Java applications to invoke Claude Code commands and stream their output in real-time.
+
+## Features
+
+- 🚀 Automated installation of Node.js and Claude Code CLI
+- 🔐 Secure API key management via environment variables
+- 🔌 MCP (Model Context Protocol) server support (Phase 2)
+- ☕ Java wrapper library for easy integration (Phase 3)
+- 📡 Real-time streaming output support
+- 💾 Intelligent caching for faster builds
+
+## Quick Start
+
+### 1. Enable the Buildpack
+
+Add the buildpack to your `manifest.yml`:
+
+```yaml
+---
+applications:
+- name: my-java-app
+  buildpacks:
+    - nodejs_buildpack
+    - https://github.com/your-org/claude-code-buildpack
+    - java_buildpack
+  env:
+    ANTHROPIC_API_KEY: sk-ant-xxxxxxxxxxxxx
+    CLAUDE_CODE_ENABLED: true
+```
+
+### 2. Alternative: Use Configuration File
+
+Create `.claude-code-config.yml` in your application root:
+
+```yaml
+claudeCode:
+  enabled: true
+  version: "latest"
+
+  authentication:
+    apiKey: ${ANTHROPIC_API_KEY}
+```
+
+### 3. Deploy Your Application
+
+```bash
+cf push
+```
+
+## Detection
+
+The buildpack will activate when any of the following conditions are met:
+
+1. `.claude-code-config.yml` file exists in the application root
+2. `CLAUDE_CODE_ENABLED=true` environment variable is set
+3. `claude-code-enabled: true` is specified in `manifest.yml`
+
+## Environment Variables
+
+### Required
+
+- `ANTHROPIC_API_KEY`: Your Anthropic API key (format: `sk-ant-...`)
+
+### Optional
+
+- `CLAUDE_CODE_ENABLED`: Enable/disable the buildpack (default: `false`)
+- `CLAUDE_CODE_VERSION`: Specific version to install (default: `latest`)
+- `CLAUDE_CODE_LOG_LEVEL`: CLI log level (default: `info`)
+- `CLAUDE_CODE_MODEL`: Default model to use (default: `sonnet`)
+- `NODE_VERSION`: Node.js version for CLI (default: `20.11.0`)
+
+## Usage in Java Applications
+
+After deployment, the Claude Code CLI is available at the path specified in the `CLAUDE_CLI_PATH` environment variable.
+
+### Basic Example
+
+```java
+ProcessBuilder pb = new ProcessBuilder(
+    System.getenv("CLAUDE_CLI_PATH"),
+    "-p", "Explain this code",
+    "--dangerously-skip-permissions"
+);
+
+Process process = pb.start();
+BufferedReader reader = new BufferedReader(
+    new InputStreamReader(process.getInputStream())
+);
+
+String line;
+while ((line = reader.readLine()) != null) {
+    System.out.println(line);
+}
+```
+
+## Installation Directory Structure
+
+```
+/home/vcap/deps/{INDEX}/
+├── bin/
+│   └── claude              # Claude Code CLI symlink
+├── node/
+│   ├── bin/
+│   │   ├── node
+│   │   └── npm
+│   └── lib/
+├── lib/
+│   └── node_modules/
+│       └── @anthropic-ai/
+│           └── claude-code/
+├── .profile.d/
+│   └── claude-code-env.sh  # Runtime environment setup
+└── config.yml              # Buildpack configuration
+```
+
+## Development
+
+### Prerequisites
+
+- Bash 4.0+
+- curl
+- tar
+- Cloud Foundry CLI
+
+### Testing Locally
+
+```bash
+# Run detection
+./bin/detect /path/to/app
+
+# Run supply phase
+./bin/supply /path/to/app /path/to/cache /path/to/deps 0
+```
+
+### Running Tests
+
+```bash
+# Run unit tests
+./tests/unit/run_tests.sh
+
+# Run integration tests (requires CF environment)
+./tests/integration/run_tests.sh
+```
+
+## Architecture
+
+This is a **supply buildpack** that works in conjunction with the Java buildpack:
+
+```
+┌─────────────────────────────────────────┐
+│   Java Application                      │
+│   - ProcessBuilder to invoke claude     │
+│   - Stream handling for real-time output│
+└─────────────────────────────────────────┘
+                  ↓
+┌─────────────────────────────────────────┐
+│   Claude Code CLI                        │
+│   - Installed at /home/vcap/deps/X/bin  │
+│   - Configured with API key             │
+└─────────────────────────────────────────┘
+                  ↓
+┌─────────────────────────────────────────┐
+│   Node.js Runtime                        │
+│   - Required for Claude CLI (npm)       │
+└─────────────────────────────────────────┘
+```
+
+## Security Considerations
+
+- **API Keys**: Never log API keys; they are only available via environment variables
+- **Permissions**: Claude Code runs with `--dangerously-skip-permissions` for automation
+- **Access Control**: Limit file system access through MCP configuration (Phase 2)
+- **Network**: Use Cloud Foundry security groups to restrict network access
+
+## Troubleshooting
+
+### Claude Code not found
+
+Ensure the buildpack was detected and applied:
+
+```bash
+cf logs my-app --recent | grep "Claude Code"
+```
+
+### API Key issues
+
+Verify your API key is set:
+
+```bash
+cf env my-app | grep ANTHROPIC_API_KEY
+```
+
+### Installation failures
+
+Check buildpack logs during staging:
+
+```bash
+cf logs my-app --recent
+```
+
+## Roadmap
+
+### Phase 1: Core Buildpack ✅ (Current)
+- [x] Basic detection and supply scripts
+- [x] Node.js installation
+- [x] Claude Code CLI installation
+- [x] Environment variable handling
+
+### Phase 2: Configuration Management (Planned)
+- [ ] MCP server configuration
+- [ ] `.claude.json` generation
+- [ ] Advanced configuration parsing
+
+### Phase 3: Java Integration (Planned)
+- [ ] Java wrapper library
+- [ ] Spring Boot integration
+- [ ] Server-Sent Events support
+
+### Phase 4: Production Readiness (Planned)
+- [ ] Security hardening
+- [ ] Performance optimization
+- [ ] Monitoring and logging
+
+## Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+## Support
+
+- **Issues**: https://github.com/your-org/claude-code-buildpack/issues
+- **Documentation**: See [docs/](docs/) directory
+- **Slack**: #claude-code-buildpack
+
+## Credits
+
+Built with ❤️ for the Cloud Foundry community.
+
+Powered by:
+- [Claude Code CLI](https://www.npmjs.com/package/@anthropic-ai/claude-code)
+- [Anthropic Claude](https://www.anthropic.com/)
+- [Cloud Foundry](https://www.cloudfoundry.org/)
