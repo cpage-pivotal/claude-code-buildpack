@@ -38,6 +38,19 @@ fi
 if [ -z "\$CLAUDE_CODE_MODEL" ]; then
     export CLAUDE_CODE_MODEL="${CLAUDE_CODE_MODEL:-sonnet}"
 fi
+
+# Configure Node.js to trust Cloud Foundry system certificates
+# This is critical for remote MCP servers (SSE/HTTP) that use internal CAs
+if [ -n "\$CF_SYSTEM_CERT_PATH" ] && [ -d "\$CF_SYSTEM_CERT_PATH" ]; then
+    # Concatenate all certificate files into a single bundle
+    # NODE_EXTRA_CA_CERTS requires a file path, not a directory
+    CA_BUNDLE="/tmp/cf-ca-bundle.crt"
+    cat "\$CF_SYSTEM_CERT_PATH"/*.crt > "\$CA_BUNDLE" 2>/dev/null
+
+    if [ -f "\$CA_BUNDLE" ]; then
+        export NODE_EXTRA_CA_CERTS="\$CA_BUNDLE"
+    fi
+fi
 EOF
 
     chmod +x "${profile_script}"

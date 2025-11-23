@@ -571,6 +571,44 @@ Check buildpack logs during staging:
 cf logs my-app --recent
 ```
 
+### Remote MCP Server Connection Failures
+
+**Problem**: Remote MCP servers (SSE/HTTP) show "Failed to connect" even though `curl` can reach them.
+
+**Symptoms**:
+- `claude mcp list` shows `✗ Failed to connect` for remote MCP servers
+- Local stdio MCP servers work fine
+- Works on your local machine but fails in Cloud Foundry
+
+**Cause**: TAS/Cloud Foundry uses internal CA certificates. Node.js needs explicit configuration to trust them.
+
+**Solution**: The buildpack automatically handles this (as of this update). If you're using an older version, you can manually verify the fix is working:
+
+```bash
+# SSH into your app (if you have access)
+cf ssh my-app
+
+# Check if the certificate bundle is created
+$ ls -la /tmp/cf-ca-bundle.crt
+$ env | grep NODE_EXTRA_CA_CERTS
+```
+
+If you see `NODE_EXTRA_CA_CERTS=/tmp/cf-ca-bundle.crt`, the buildpack configured it correctly.
+
+**Manual Workaround** (for older buildpack versions):
+
+Create `.profile.d/node-ca-certs.sh` in your application:
+
+```bash
+#!/bin/bash
+if [ -d "$CF_SYSTEM_CERT_PATH" ]; then
+    cat "$CF_SYSTEM_CERT_PATH"/*.crt > /tmp/ca-bundle.crt 2>/dev/null
+    export NODE_EXTRA_CA_CERTS=/tmp/ca-bundle.crt
+fi
+```
+
+Then redeploy with `cf push`.
+
 ## Roadmap
 
 ### Phase 1: Core Buildpack ✅ Complete

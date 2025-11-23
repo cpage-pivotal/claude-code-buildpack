@@ -968,6 +968,54 @@ local profile_script="${build_dir}/.profile.d/claude-code-env.sh"
 
 This ensures that `CLAUDE_CLI_PATH` and other environment variables are properly set at runtime and available to Java applications via `System.getenv()`.
 
+#### Remote MCP Server Connection Failures (SSE/HTTP)
+**Error**: `claude mcp list` shows remote MCP servers as "✗ Failed to connect" even though `curl` can reach the endpoint successfully.
+
+**Symptoms**:
+- Local (stdio) MCP servers work fine
+- Remote (SSE/HTTP) MCP servers show connection failures
+- `curl https://mcp-server.example.com/sse` succeeds from the container
+- Works on local machine but fails in Cloud Foundry
+
+**Cause**: Node.js requires explicit CA certificate configuration when connecting to servers using internal/custom certificate authorities (common in TAS/Cloud Foundry environments). The `CF_SYSTEM_CERT_PATH` environment variable points to a **directory** of certificate files, but Node.js's `NODE_EXTRA_CA_CERTS` requires a **file path** to a certificate bundle.
+
+**Diagnosis**:
+```bash
+# Check if CF_SYSTEM_CERT_PATH is set
+env | grep CF_SYSTEM_CERT_PATH
+
+# Test if it's a directory issue
+cat /etc/cf-system-certificates/*.crt > /tmp/ca-bundle.crt
+NODE_EXTRA_CA_CERTS=/tmp/ca-bundle.crt claude mcp list
+```
+
+**Fix**: The buildpack now automatically handles this in `lib/environment.sh`. The `.profile.d` script detects `CF_SYSTEM_CERT_PATH`, concatenates all certificate files into `/tmp/cf-ca-bundle.crt`, and sets `NODE_EXTRA_CA_CERTS` to point to the bundle:
+
+```bash
+# Automatically added to .profile.d/claude-code-env.sh
+if [ -n "$CF_SYSTEM_CERT_PATH" ] && [ -d "$CF_SYSTEM_CERT_PATH" ]; then
+    CA_BUNDLE="/tmp/cf-ca-bundle.crt"
+    cat "$CF_SYSTEM_CERT_PATH"/*.crt > "$CA_BUNDLE" 2>/dev/null
+    if [ -f "$CA_BUNDLE" ]; then
+        export NODE_EXTRA_CA_CERTS="$CA_BUNDLE"
+    fi
+fi
+```
+
+**Manual Workaround** (for older buildpack versions):
+Set `NODE_EXTRA_CA_CERTS` manually in your `manifest.yml`:
+```yaml
+env:
+  NODE_EXTRA_CA_CERTS: /etc/cf-system-certificates  # Won't work - directory
+```
+
+Instead, use a `.profile.d` script in your app:
+```bash
+# .profile.d/node-ca-certs.sh
+cat /etc/cf-system-certificates/*.crt > /tmp/ca-bundle.crt
+export NODE_EXTRA_CA_CERTS=/tmp/ca-bundle.crt
+```
+
 ---
 
 ## Dependencies
