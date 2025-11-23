@@ -5,10 +5,9 @@ This is an example Spring Boot application demonstrating integration with Claude
 ## Features
 
 - ✅ Auto-configured Claude Code integration
-- ✅ REST API endpoints for code analysis
-- ✅ Unit test generation
-- ✅ Code refactoring with streaming output
-- ✅ Interactive code reviews
+- ✅ REST API endpoints for executing prompts
+- ✅ Multiple execution patterns (sync, async, streaming)
+- ✅ Structured and plain text responses
 - ✅ Health checks
 
 ## Prerequisites
@@ -101,48 +100,66 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment checklist and trouble
 ### Health Check
 
 ```bash
-curl https://claude-code-demo.example.com/demo/status
+http https://claude-code-demo.example.com/demo/status
 ```
 
-### Code Analysis
+### Execute Prompt with Structured Response
+
+The `/demo/execute-with-response` endpoint accepts any prompt and returns a structured response with success status.
 
 ```bash
-curl -X POST https://claude-code-demo.example.com/demo/analyze \
-  -H "Content-Type: application/json" \
-  -d '{
-    "code": "public void processData(List<String> data) { for(int i=0; i<data.size(); i++) { System.out.println(data.get(i)); } }"
-  }'
+http POST https://claude-code-demo.example.com/demo/execute-with-response \
+  prompt="Analyze this Java code for potential bugs, performance issues, and best practices:
+
+public void processData(List<String> data) {
+    for(int i=0; i<data.size(); i++) {
+        System.out.println(data.get(i));
+    }
+}"
 ```
 
-### Generate Tests
+### Execute Prompt with Custom Options
+
+The `/demo/execute-with-options` endpoint demonstrates using custom execution options (timeout, model selection).
 
 ```bash
-curl -X POST https://claude-code-demo.example.com/demo/generate-tests \
-  -H "Content-Type: application/json" \
-  -d '{
-    "code": "public class Calculator { public int add(int a, int b) { return a + b; } }"
-  }'
+http POST https://claude-code-demo.example.com/demo/execute-with-options \
+  prompt="Generate JUnit 5 unit tests for this Java code:
+
+public class Calculator {
+    public int add(int a, int b) {
+        return a + b;
+    }
+}"
 ```
 
-### Streaming Refactor
+### Execute Prompt with Streaming
+
+The `/demo/execute-streaming` endpoint executes prompts with streaming output for real-time responses.
 
 ```bash
-curl -X POST https://claude-code-demo.example.com/demo/refactor/stream \
-  -H "Content-Type: application/json" \
-  -d '{
-    "code": "public void test() { int x = 1; int y = 2; int z = x + y; return z; }"
-  }'
+http --stream POST https://claude-code-demo.example.com/demo/execute-streaming \
+  prompt="Refactor this Java code to improve readability and maintainability:
+
+public void test() {
+    int x = 1;
+    int y = 2;
+    int z = x + y;
+    return z;
+}"
 ```
 
-### Code Review
+### Execute Prompt with Simple Response
+
+The `/demo/execute` endpoint accepts any prompt and returns a plain text response.
 
 ```bash
-curl -X POST https://claude-code-demo.example.com/demo/review \
-  -H "Content-Type: application/json" \
-  -d '{
-    "code": "...",
-    "focus": "security"
-  }'
+http POST https://claude-code-demo.example.com/demo/execute \
+  prompt="Perform a detailed code review focusing on security for this authentication code:
+
+public void authenticate(String username, String password) {
+    // authentication logic here
+}"
 ```
 
 ## Endpoints
@@ -150,10 +167,10 @@ curl -X POST https://claude-code-demo.example.com/demo/review \
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/demo/status` | GET | Health check |
-| `/demo/analyze` | POST | Analyze code for issues |
-| `/demo/generate-tests` | POST | Generate unit tests |
-| `/demo/refactor/stream` | POST | Refactor code (streaming) |
-| `/demo/review` | POST | Perform code review |
+| `/demo/execute` | POST | Execute prompt with simple response |
+| `/demo/execute-with-response` | POST | Execute prompt with structured response |
+| `/demo/execute-with-options` | POST | Execute prompt with custom options |
+| `/demo/execute-streaming` | POST | Execute prompt with streaming output |
 | `/api/claude/execute` | POST | Direct CLI execution |
 | `/api/claude/stream` | POST | Streaming execution |
 | `/api/claude/health` | GET | CLI health check |

@@ -4,9 +4,9 @@ applications:
   memory: 3G
   buildpacks:
     - nodejs_buildpack
-    - https://github.com/cpage-picotal/claude-code-buildpack
+    - https://github.com/cpage-pivotal/claude-code-buildpack
     - java_buildpack_offline
   path: target/claude-code-demo-1.0.0.jar
   env:
     JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { version: 21.+ } }'
-    ANTHROPIC_API_KEY: ((anthropic-api-key))
+    ANTHROPIC_API_KEY: ((ANTHROPIC_API_KEY))

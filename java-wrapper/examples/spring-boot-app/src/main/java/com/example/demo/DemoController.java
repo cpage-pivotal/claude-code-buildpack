@@ -26,43 +26,47 @@ public class DemoController {
         this.executor = executor;
     }
 
+    public record PromptRequest(String prompt) {}
+
     /**
-     * Simple code analysis endpoint.
+     * Execute a prompt and return structured response.
      * 
-     * Example: POST /demo/analyze
-     * Body: { "code": "public void test() { ... }" }
+     * Example: POST /demo/execute-with-response
+     * Body: { "prompt": "Analyze this Java code for potential bugs: public void test() { ... }" }
      */
-    @PostMapping("/analyze")
-    public Mono<AnalysisResponse> analyzeCode(@RequestBody CodeRequest request) {
-        logger.info("Analyzing code snippet");
+    @PostMapping("/execute-with-response")
+    public Mono<AnalysisResponse> executeWithResponse(@RequestBody PromptRequest request) {
+        String prompt = request.prompt();
+        if (prompt == null || prompt.trim().isEmpty()) {
+            logger.warn("Received null or empty prompt");
+            return Mono.just(new AnalysisResponse(false, "Error: Prompt cannot be null or empty"));
+        }
         
-        String prompt = String.format(
-            "Analyze this Java code for potential bugs, performance issues, and best practices:\n\n%s",
-            request.getCode()
-        );
+        logger.info("Executing prompt: {}", prompt.substring(0, Math.min(50, prompt.length())));
         
         return Mono.fromFuture(executor.executeAsync(prompt))
             .map(result -> new AnalysisResponse(true, result))
             .onErrorResume(e -> {
-                logger.error("Analysis failed", e);
+                logger.error("Execution failed", e);
                 return Mono.just(new AnalysisResponse(false, "Error: " + e.getMessage()));
             });
     }
 
     /**
-     * Generate unit tests for provided code.
+     * Execute a prompt with custom options.
      * 
-     * Example: POST /demo/generate-tests
-     * Body: { "code": "public void test() { ... }" }
+     * Example: POST /demo/execute-with-options
+     * Body: { "prompt": "Generate JUnit 5 unit tests for this Java code: public void test() { ... }" }
      */
-    @PostMapping("/generate-tests")
-    public Mono<String> generateTests(@RequestBody CodeRequest request) {
-        logger.info("Generating unit tests");
+    @PostMapping("/execute-with-options")
+    public Mono<String> executeWithOptions(@RequestBody PromptRequest request) {
+        String prompt = request.prompt();
+        if (prompt == null || prompt.trim().isEmpty()) {
+            logger.warn("Received null or empty prompt");
+            return Mono.error(new IllegalArgumentException("Prompt cannot be null or empty"));
+        }
         
-        String prompt = String.format(
-            "Generate JUnit 5 unit tests for this Java code:\n\n%s",
-            request.getCode()
-        );
+        logger.info("Executing prompt with options: {}", prompt.substring(0, Math.min(50, prompt.length())));
         
         ClaudeCodeOptions options = ClaudeCodeOptions.builder()
             .timeout(Duration.ofMinutes(5))
@@ -73,19 +77,20 @@ public class DemoController {
     }
 
     /**
-     * Refactor code with streaming output.
+     * Execute a prompt with streaming output.
      * 
-     * Example: POST /demo/refactor/stream
-     * Body: { "code": "public void test() { ... }" }
+     * Example: POST /demo/execute-streaming
+     * Body: { "prompt": "Refactor this Java code to improve readability: public void test() { ... }" }
      */
-    @PostMapping(value = "/refactor/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<String> refactorCodeStreaming(@RequestBody CodeRequest request) {
-        logger.info("Refactoring code with streaming");
+    @PostMapping(value = "/execute-streaming", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<String> executeStreaming(@RequestBody PromptRequest request) {
+        String prompt = request.prompt();
+        if (prompt == null || prompt.trim().isEmpty()) {
+            logger.warn("Received null or empty prompt");
+            return Flux.error(new IllegalArgumentException("Prompt cannot be null or empty"));
+        }
         
-        String prompt = String.format(
-            "Refactor this Java code to improve readability and maintainability:\n\n%s",
-            request.getCode()
-        );
+        logger.info("Executing prompt with streaming: {}", prompt.substring(0, Math.min(50, prompt.length())));
         
         return Flux.fromStream(() -> executor.executeStreaming(prompt))
             .delayElements(Duration.ofMillis(10))
@@ -94,20 +99,20 @@ public class DemoController {
     }
 
     /**
-     * Interactive code review.
+     * Execute a prompt with simple string response.
      * 
-     * Example: POST /demo/review
-     * Body: { "code": "...", "focus": "security" }
+     * Example: POST /demo/execute
+     * Body: { "prompt": "Perform a detailed code review focusing on security: public void authenticate() { ... }" }
      */
-    @PostMapping("/review")
-    public Mono<String> reviewCode(@RequestBody ReviewRequest request) {
-        logger.info("Performing code review with focus: {}", request.getFocus());
+    @PostMapping("/execute")
+    public Mono<String> execute(@RequestBody PromptRequest request) {
+        String prompt = request.prompt();
+        if (prompt == null || prompt.trim().isEmpty()) {
+            logger.warn("Received null or empty prompt");
+            return Mono.error(new IllegalArgumentException("Prompt cannot be null or empty"));
+        }
         
-        String prompt = String.format(
-            "Perform a detailed code review focusing on %s:\n\n%s",
-            request.getFocus(),
-            request.getCode()
-        );
+        logger.info("Executing prompt: {}", prompt.substring(0, Math.min(50, prompt.length())));
         
         return Mono.fromFuture(executor.executeAsync(prompt));
     }
@@ -126,40 +131,7 @@ public class DemoController {
         ));
     }
 
-    // Request/Response models
-
-    public static class CodeRequest {
-        private String code;
-
-        public String getCode() {
-            return code;
-        }
-
-        public void setCode(String code) {
-            this.code = code;
-        }
-    }
-
-    public static class ReviewRequest {
-        private String code;
-        private String focus = "general";
-
-        public String getCode() {
-            return code;
-        }
-
-        public void setCode(String code) {
-            this.code = code;
-        }
-
-        public String getFocus() {
-            return focus;
-        }
-
-        public void setFocus(String focus) {
-            this.focus = focus;
-        }
-    }
+    // Response models
 
     public static class AnalysisResponse {
         private boolean success;
