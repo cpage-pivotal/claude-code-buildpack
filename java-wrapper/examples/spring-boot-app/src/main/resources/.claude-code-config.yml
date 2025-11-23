@@ -1,0 +1,10 @@
+claudeCode:
+  enabled: true
+  version: "latest"
+  logLevel: info
+  model: sonnet
+  
+  mcpServers:
+    - name: github
+      type: sse
+      url: "https://github-mcp-server.apps.tas-ndc.kuhn-labs.com/sse"

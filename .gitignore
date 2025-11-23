@@ -43,3 +43,4 @@ logs/
 
 # Dependencies cache
 dependency-cache/
+java-wrapper/examples/spring-boot-app/vars.yaml
