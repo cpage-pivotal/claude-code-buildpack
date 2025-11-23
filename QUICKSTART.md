@@ -32,19 +32,88 @@ applications:
 
 **Important**: The buildpack order matters! Node.js must come first, then Claude Code, then Java.
 
-## Step 3: Deploy
+## Step 3: Configure Maven for JAR Deployment
+
+For Spring Boot applications, you must embed the config file in your JAR. Add this plugin to your `pom.xml`:
+
+```xml
+<build>
+    <plugins>
+        <plugin>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-maven-plugin</artifactId>
+        </plugin>
+
+        <!-- Add config file to JAR root after Spring Boot repackaging -->
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-antrun-plugin</artifactId>
+            <version>3.1.0</version>
+            <executions>
+                <execution>
+                    <id>add-config-to-jar</id>
+                    <phase>package</phase>
+                    <goals>
+                        <goal>run</goal>
+                    </goals>
+                    <configuration>
+                        <target>
+                            <jar destfile="${project.build.directory}/${project.build.finalName}.jar" update="true">
+                                <fileset dir="${project.basedir}" includes=".claude-code-config.yml"/>
+                            </jar>
+                        </target>
+                    </configuration>
+                </execution>
+            </executions>
+        </plugin>
+    </plugins>
+</build>
+```
+
+## Step 4: Build and Verify
+
+Build your application and verify the config file is properly embedded:
+
+```bash
+mvn clean package
+
+# Verify config is at JAR root (not in BOOT-INF/classes/)
+jar tf target/my-app.jar | head -20
+```
+
+You should see `.claude-code-config.yml` listed at the root of the JAR, **not** inside `BOOT-INF/classes/`.
+
+## Step 5: Deploy
+
+Update your manifest to deploy the JAR:
+
+```yaml
+# manifest.yml
+applications:
+  - name: my-java-app
+    path: target/my-app.jar  # Now you can deploy the JAR
+    buildpacks:
+      - nodejs_buildpack
+      - https://github.com/your-org/claude-code-buildpack
+      - java_buildpack
+    env:
+      ANTHROPIC_API_KEY: sk-ant-xxxxxxxxxxxxx
+      CLAUDE_CODE_ENABLED: true
+```
+
+Then push your application:
 
 ```bash
 cf push
 ```
 
-That's it! The buildpack will:
+The buildpack will:
 1. Install Node.js
 2. Install Claude Code CLI
 3. Configure your environment
 4. Build your Java application
 
-## Step 4: Verify Installation
+## Step 6: Verify Installation
 
 Check that Claude Code is available:
 
@@ -57,7 +126,7 @@ cf ssh my-java-app
 2.0.50  # or whatever version was installed
 ```
 
-## Step 5: Use in Your Java Code
+## Step 7: Use in Your Java Code
 
 ### Basic Example (Correct Pattern)
 

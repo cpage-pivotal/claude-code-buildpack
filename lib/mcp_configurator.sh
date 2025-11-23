@@ -282,9 +282,10 @@ validate_mcp_config() {
     fi
 
     # Check if mcpServers has any servers configured
-    local server_count=$(grep -c '"type"' "${config_file}" 2>/dev/null || echo "0")
+    # Note: grep -c outputs "0" even when no matches are found, so we don't need || echo "0"
+    local server_count=$(grep -c '"type"' "${config_file}" 2>/dev/null || true)
 
-    if [ "${server_count}" -eq 0 ]; then
+    if [ "${server_count}" -eq 0 ] 2>/dev/null; then
         echo "       No MCP servers configured (using empty configuration)"
     else
         echo "       Validated .claude.json with ${server_count} MCP server(s)"
