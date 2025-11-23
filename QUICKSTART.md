@@ -32,39 +32,9 @@ applications:
 
 **Important**: The buildpack order matters! Node.js must come first, then Claude Code, then Java.
 
-## Step 3: Deploy
+## Step 3: Configure Maven for JAR Deployment
 
-### Option A: Deploy Application Directory (Recommended)
-
-This is the simplest approach - deploy your entire application directory:
-
-```yaml
-# manifest.yml
-applications:
-  - name: my-java-app
-    path: .  # Deploy the directory, not the JAR
-    buildpacks:
-      - nodejs_buildpack
-      - https://github.com/your-org/claude-code-buildpack
-      - java_buildpack
-    env:
-      ANTHROPIC_API_KEY: sk-ant-xxxxxxxxxxxxx
-      CLAUDE_CODE_ENABLED: true
-```
-
-Then push:
-
-```bash
-cf push
-```
-
-Cloud Foundry will automatically find your JAR in `target/` and include your `.claude-code-config.yml`.
-
-### Option B: Deploy Spring Boot JAR Directly
-
-If you need to deploy the JAR file directly, you must embed the config file in the JAR.
-
-**1. Add this plugin to your `pom.xml`:**
+For Spring Boot applications, you must embed the config file in your JAR. Add this plugin to your `pom.xml`:
 
 ```xml
 <build>
@@ -100,7 +70,9 @@ If you need to deploy the JAR file directly, you must embed the config file in t
 </build>
 ```
 
-**2. Build and verify:**
+## Step 4: Build and Verify
+
+Build your application and verify the config file is properly embedded:
 
 ```bash
 mvn clean package
@@ -109,7 +81,11 @@ mvn clean package
 jar tf target/my-app.jar | head -20
 ```
 
-**3. Update manifest to point to JAR:**
+You should see `.claude-code-config.yml` listed at the root of the JAR, **not** inside `BOOT-INF/classes/`.
+
+## Step 5: Deploy
+
+Update your manifest to deploy the JAR:
 
 ```yaml
 # manifest.yml
@@ -125,21 +101,19 @@ applications:
       CLAUDE_CODE_ENABLED: true
 ```
 
-**4. Deploy:**
+Then push your application:
 
 ```bash
 cf push
 ```
 
----
-
-That's it! The buildpack will:
+The buildpack will:
 1. Install Node.js
 2. Install Claude Code CLI
 3. Configure your environment
 4. Build your Java application
 
-## Step 4: Verify Installation
+## Step 6: Verify Installation
 
 Check that Claude Code is available:
 
@@ -152,7 +126,7 @@ cf ssh my-java-app
 2.0.50  # or whatever version was installed
 ```
 
-## Step 5: Use in Your Java Code
+## Step 7: Use in Your Java Code
 
 ### Basic Example (Correct Pattern)
 

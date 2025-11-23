@@ -68,28 +68,9 @@ The buildpack will activate when any of the following conditions are met:
 2. `CLAUDE_CODE_ENABLED=true` environment variable is set
 3. `claude-code-enabled: true` is specified in `manifest.yml`
 
-## Deployment Options
+## Spring Boot JAR Deployment
 
-### Option 1: Deploy Application Directory (Recommended)
-
-Deploy your entire application directory, which automatically includes configuration files:
-
-```yaml
-# manifest.yml
-applications:
-  - name: my-java-app
-    path: .  # Deploy the entire directory
-    buildpacks:
-      - nodejs_buildpack
-      - https://github.com/your-org/claude-code-buildpack
-      - java_buildpack
-```
-
-Cloud Foundry will automatically detect and run your JAR from the `target/` directory.
-
-### Option 2: Deploy Spring Boot JAR with Embedded Config
-
-If you're deploying a Spring Boot JAR file directly, you need to embed `.claude-code-config.yml` in the JAR root.
+When deploying a Spring Boot JAR file, you need to embed `.claude-code-config.yml` in the JAR root for the buildpack to detect it during staging.
 
 **Add to your `pom.xml`:**
 
@@ -152,7 +133,7 @@ applications:
       - java_buildpack
 ```
 
-**Note:** The config file must be at the JAR root, not inside `BOOT-INF/classes/`, for the buildpack to detect it during staging.
+**Important:** The config file must be at the JAR root, not inside `BOOT-INF/classes/`, for the buildpack to detect it during staging. Spring Boot's repackaging places resources in `BOOT-INF/classes/` by default, so the `maven-antrun-plugin` is required to add the file to the JAR root after repackaging.
 
 ## Configuration
 
