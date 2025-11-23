@@ -68,6 +68,92 @@ The buildpack will activate when any of the following conditions are met:
 2. `CLAUDE_CODE_ENABLED=true` environment variable is set
 3. `claude-code-enabled: true` is specified in `manifest.yml`
 
+## Deployment Options
+
+### Option 1: Deploy Application Directory (Recommended)
+
+Deploy your entire application directory, which automatically includes configuration files:
+
+```yaml
+# manifest.yml
+applications:
+  - name: my-java-app
+    path: .  # Deploy the entire directory
+    buildpacks:
+      - nodejs_buildpack
+      - https://github.com/your-org/claude-code-buildpack
+      - java_buildpack
+```
+
+Cloud Foundry will automatically detect and run your JAR from the `target/` directory.
+
+### Option 2: Deploy Spring Boot JAR with Embedded Config
+
+If you're deploying a Spring Boot JAR file directly, you need to embed `.claude-code-config.yml` in the JAR root.
+
+**Add to your `pom.xml`:**
+
+```xml
+<build>
+    <plugins>
+        <plugin>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-maven-plugin</artifactId>
+        </plugin>
+
+        <!-- Add config file to JAR root after Spring Boot repackaging -->
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-antrun-plugin</artifactId>
+            <version>3.1.0</version>
+            <executions>
+                <execution>
+                    <id>add-config-to-jar</id>
+                    <phase>package</phase>
+                    <goals>
+                        <goal>run</goal>
+                    </goals>
+                    <configuration>
+                        <target>
+                            <jar destfile="${project.build.directory}/${project.build.finalName}.jar" update="true">
+                                <fileset dir="${project.basedir}" includes=".claude-code-config.yml"/>
+                            </jar>
+                        </target>
+                    </configuration>
+                </execution>
+            </executions>
+        </plugin>
+    </plugins>
+</build>
+```
+
+**Build and verify:**
+
+```bash
+# Build your JAR
+mvn clean package
+
+# Verify the config file is at the JAR root (not in BOOT-INF/classes/)
+jar tf target/my-app.jar | head -20
+```
+
+You should see `.claude-code-config.yml` listed at the root of the JAR.
+
+**Deploy the JAR:**
+
+```yaml
+# manifest.yml
+applications:
+  - name: my-java-app
+    path: target/my-app.jar  # Deploy the JAR directly
+    buildpacks:
+      - nodejs_buildpack
+      - https://github.com/your-org/claude-code-buildpack
+      - java_buildpack
+```
+
+**Note:** The config file must be at the JAR root, not inside `BOOT-INF/classes/`, for the buildpack to detect it during staging.
+
 ## Configuration
 
 ### Configuration File Settings

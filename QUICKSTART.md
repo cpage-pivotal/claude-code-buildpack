@@ -34,9 +34,104 @@ applications:
 
 ## Step 3: Deploy
 
+### Option A: Deploy Application Directory (Recommended)
+
+This is the simplest approach - deploy your entire application directory:
+
+```yaml
+# manifest.yml
+applications:
+  - name: my-java-app
+    path: .  # Deploy the directory, not the JAR
+    buildpacks:
+      - nodejs_buildpack
+      - https://github.com/your-org/claude-code-buildpack
+      - java_buildpack
+    env:
+      ANTHROPIC_API_KEY: sk-ant-xxxxxxxxxxxxx
+      CLAUDE_CODE_ENABLED: true
+```
+
+Then push:
+
 ```bash
 cf push
 ```
+
+Cloud Foundry will automatically find your JAR in `target/` and include your `.claude-code-config.yml`.
+
+### Option B: Deploy Spring Boot JAR Directly
+
+If you need to deploy the JAR file directly, you must embed the config file in the JAR.
+
+**1. Add this plugin to your `pom.xml`:**
+
+```xml
+<build>
+    <plugins>
+        <plugin>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-maven-plugin</artifactId>
+        </plugin>
+
+        <!-- Add config file to JAR root after Spring Boot repackaging -->
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-antrun-plugin</artifactId>
+            <version>3.1.0</version>
+            <executions>
+                <execution>
+                    <id>add-config-to-jar</id>
+                    <phase>package</phase>
+                    <goals>
+                        <goal>run</goal>
+                    </goals>
+                    <configuration>
+                        <target>
+                            <jar destfile="${project.build.directory}/${project.build.finalName}.jar" update="true">
+                                <fileset dir="${project.basedir}" includes=".claude-code-config.yml"/>
+                            </jar>
+                        </target>
+                    </configuration>
+                </execution>
+            </executions>
+        </plugin>
+    </plugins>
+</build>
+```
+
+**2. Build and verify:**
+
+```bash
+mvn clean package
+
+# Verify config is at JAR root (not in BOOT-INF/classes/)
+jar tf target/my-app.jar | head -20
+```
+
+**3. Update manifest to point to JAR:**
+
+```yaml
+# manifest.yml
+applications:
+  - name: my-java-app
+    path: target/my-app.jar  # Now you can deploy the JAR
+    buildpacks:
+      - nodejs_buildpack
+      - https://github.com/your-org/claude-code-buildpack
+      - java_buildpack
+    env:
+      ANTHROPIC_API_KEY: sk-ant-xxxxxxxxxxxxx
+      CLAUDE_CODE_ENABLED: true
+```
+
+**4. Deploy:**
+
+```bash
+cf push
+```
+
+---
 
 That's it! The buildpack will:
 1. Install Node.js
