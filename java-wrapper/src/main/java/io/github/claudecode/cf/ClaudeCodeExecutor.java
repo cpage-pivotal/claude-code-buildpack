@@ -11,7 +11,7 @@ import java.util.stream.Stream;
  * <ul>
  *   <li>Synchronous execution - blocks until command completes</li>
  *   <li>Asynchronous execution - returns immediately with a CompletableFuture</li>
- *   <li>Streaming execution - returns a Stream of output lines</li>
+ *   <li>Streaming execution - returns a Stream of output lines as they arrive</li>
  * </ul>
  *
  * <p>Example usage:</p>
@@ -25,9 +25,10 @@ import java.util.stream.Stream;
  * CompletableFuture<String> future = executor.executeAsync("Generate unit tests");
  * future.thenAccept(result -> System.out.println(result));
  * 
- * // Streaming execution
- * Stream<String> lines = executor.executeStreaming("Refactor this function");
- * lines.forEach(System.out::println);
+ * // Streaming execution (MUST use try-with-resources)
+ * try (Stream<String> lines = executor.executeStreaming("Refactor this function")) {
+ *     lines.forEach(System.out::println);
+ * }
  * }</pre>
  *
  * @author Claude Code Buildpack Team
@@ -92,29 +93,72 @@ public interface ClaudeCodeExecutor {
      * Execute a Claude Code command and return output as a stream of lines.
      * <p>
      * This method returns a Stream that emits each line of output as it becomes
-     * available. This is useful for real-time output display or processing large
-     * responses incrementally.
+     * available from the Claude Code CLI process. This enables true real-time streaming
+     * where lines are processed as they are produced, not after the command completes.
      * </p>
      * <p>
-     * <strong>Note:</strong> The returned Stream must be closed properly to avoid
-     * resource leaks. Use try-with-resources or call {@code close()} explicitly.
+     * <strong>CRITICAL - Resource Management:</strong> The returned Stream manages an
+     * active subprocess and must be closed to prevent resource leaks. Always use
+     * try-with-resources or explicitly call {@code close()} on the Stream:
+     * </p>
+     * <pre>{@code
+     * // Recommended: try-with-resources
+     * try (Stream<String> lines = executor.executeStreaming("analyze code")) {
+     *     lines.forEach(System.out::println);
+     * }
+     * 
+     * // Alternative: explicit close
+     * Stream<String> lines = executor.executeStreaming("analyze code");
+     * try {
+     *     lines.forEach(System.out::println);
+     * } finally {
+     *     lines.close();
+     * }
+     * }</pre>
+     * <p>
+     * If the Stream is not closed, the underlying Claude Code process will continue
+     * running until the configured timeout, wasting system resources.
+     * </p>
+     * <p>
+     * <strong>Timeout Enforcement:</strong> The process will be forcibly terminated if
+     * it exceeds the configured timeout duration (default: 3 minutes), even if the
+     * Stream is still open. This prevents runaway processes.
      * </p>
      *
      * @param prompt the prompt to send to Claude Code
-     * @return a Stream of output lines
+     * @return a Stream of output lines that must be closed when done
      * @throws IllegalArgumentException if prompt is null or empty
-     * @throws ClaudeCodeExecutionException if command execution fails
+     * @throws ClaudeCodeExecutionException if command execution fails to start
      */
     Stream<String> executeStreaming(String prompt);
 
     /**
      * Execute a Claude Code command and return output as a stream of lines with options.
+     * <p>
+     * This method provides more control over streaming execution, including custom
+     * timeout values, model selection, and additional CLI flags.
+     * </p>
+     * <p>
+     * <strong>CRITICAL - Resource Management:</strong> The returned Stream manages an
+     * active subprocess and must be closed to prevent resource leaks. Always use
+     * try-with-resources or explicitly call {@code close()} on the Stream.
+     * </p>
+     * <pre>{@code
+     * ClaudeCodeOptions options = ClaudeCodeOptions.builder()
+     *     .timeout(Duration.ofMinutes(5))
+     *     .model("sonnet")
+     *     .build();
+     * 
+     * try (Stream<String> lines = executor.executeStreaming("analyze code", options)) {
+     *     lines.forEach(System.out::println);
+     * }
+     * }</pre>
      *
      * @param prompt the prompt to send to Claude Code
      * @param options execution options (timeout, model, etc.)
-     * @return a Stream of output lines
+     * @return a Stream of output lines that must be closed when done
      * @throws IllegalArgumentException if prompt is null or empty
-     * @throws ClaudeCodeExecutionException if command execution fails
+     * @throws ClaudeCodeExecutionException if command execution fails to start
      */
     Stream<String> executeStreaming(String prompt, ClaudeCodeOptions options);
 

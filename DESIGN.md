@@ -12,9 +12,23 @@ This document outlines the design and implementation plan for a Cloud Foundry bu
 |-------|--------|-------------|
 | Phase 1: Core Buildpack | ✅ **Complete** | Detection, Node.js/CLI installation, environment setup, unit tests |
 | Phase 2: Configuration | ✅ **Complete** | MCP server configuration, `.claude.json` generation, YAML settings |
-| Phase 3: Java Integration | ✅ **Complete** | Java wrapper library, Spring Boot integration, REST API, examples |
+| Phase 3: Java Integration | ✅ **Complete** | Java wrapper library, **true streaming**, Spring Boot integration, REST API, examples |
 | Phase 4: Production | ⏸ Planned | Security hardening, performance optimization, testing |
 | Phase 5: Release | ⏸ Planned | Final documentation, packaging, distribution |
+
+**Phase 3 Deliverables:**
+- ✅ Java wrapper library (ClaudeCodeExecutor interface and implementation)
+- ✅ **True line-by-line streaming** from Process.getInputStream()
+- ✅ StreamingProcessHandle for process lifecycle management
+- ✅ Background timeout enforcement via ScheduledExecutorService
+- ✅ Spring Boot auto-configuration and REST controllers
+- ✅ Flux.using() resource management for Spring WebFlux
+- ✅ StreamingExamples.java with 10 comprehensive usage patterns
+- ✅ Complete documentation (README, STREAMING_IMPLEMENTATION.md)
+- ✅ Example Spring Boot application
+
+**Branch:** `streaming`
+**See:** [STREAMING_IMPLEMENTATION.md](java-wrapper/STREAMING_IMPLEMENTATION.md) for detailed streaming implementation notes
 
 **Phase 2 Deliverables:**
 - ✅ YAML configuration parsing (.claude-code-config.yml)
@@ -379,8 +393,52 @@ public class ClaudeCodeExecutorImpl implements ClaudeCodeExecutor {
 
     @Override
     public Stream<String> executeStreaming(String prompt) {
-        // For streaming, execute and split into lines
-        return Arrays.stream(execute(prompt).split("\n"));
+        // TRUE STREAMING: Read lines as they arrive from the process
+        ProcessBuilder pb = new ProcessBuilder(claudePath, "-p", prompt, "--dangerously-skip-permissions");
+        pb.environment().putAll(environment);
+        pb.redirectErrorStream(true);
+        
+        try {
+            Process process = pb.start();
+            process.getOutputStream().close();
+            
+            // Create streaming handle for timeout enforcement
+            StreamingProcessHandle handle = new StreamingProcessHandle(process, Duration.ofMinutes(3));
+            
+            // Create stream that reads lines as they arrive
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            
+            // Return stream with proper cleanup handlers
+            return reader.lines().onClose(() -> {
+                handle.close();
+                try { reader.close(); } catch (IOException e) { /* ignore */ }
+            });
+        } catch (IOException e) {
+            throw new ClaudeCodeExecutionException("Failed to start streaming", e);
+        }
+    }
+    
+    // Inner class for managing streaming process lifecycle
+    private static class StreamingProcessHandle implements AutoCloseable {
+        private final Process process;
+        private final ScheduledFuture<?> timeoutTask;
+        
+        public StreamingProcessHandle(Process process, Duration timeout) {
+            this.process = process;
+            this.timeoutTask = timeoutExecutor.schedule(() -> {
+                if (process.isAlive()) {
+                    process.destroyForcibly();
+                }
+            }, timeout.toMillis(), TimeUnit.MILLISECONDS);
+        }
+        
+        @Override
+        public void close() {
+            timeoutTask.cancel(false);
+            if (process.isAlive()) {
+                process.destroy();
+            }
+        }
     }
 
     @Override
@@ -424,8 +482,18 @@ public class ClaudeCodeController {
     
     @PostMapping("/execute")
     public Flux<String> executeStreaming(@RequestBody PromptRequest request) {
-        return Flux.fromStream(executor.executeStreaming(request.getPrompt()))
-            .delayElements(Duration.ofMillis(10)); // Smooth streaming
+        // Use Flux.using() for proper resource management
+        return Flux.using(
+            // Resource supplier: create the Stream
+            () -> executor.executeStreaming(request.getPrompt()),
+            // Flux generator: convert Stream to Flux
+            stream -> Flux.fromStream(stream),
+            // Cleanup: close the Stream when done
+            stream -> stream.close()
+        )
+        .doOnError(e -> logger.error("Streaming error", e))
+        .doOnComplete(() -> logger.info("Streaming completed"))
+        .doOnCancel(() -> logger.info("Streaming cancelled by client"));
     }
     
     @PostMapping("/execute-sync")
@@ -436,6 +504,12 @@ public class ClaudeCodeController {
 }
 ```
 
+**Key Changes from Original Design:**
+- Now uses `Flux.using()` for proper resource management
+- Ensures Stream is closed even if client disconnects
+- Removed artificial `delayElements()` - no longer needed with true streaming
+- Added cancellation handling
+
 ### 3. Real-time Streaming with Server-Sent Events (SSE)
 
 ```java
@@ -443,16 +517,131 @@ public class ClaudeCodeController {
 public Flux<ServerSentEvent<String>> streamClaudeOutput(
     @RequestParam String prompt) {
 
-    return Flux.fromStream(executor.executeStreaming(prompt))
-        .map(line -> ServerSentEvent.<String>builder()
-            .data(line)
-            .build())
+    // Use Flux.using() to ensure proper resource cleanup
+    return Flux.using(
+            () -> executor.executeStreaming(prompt),
+            stream -> Flux.fromStream(stream)
+                .map(line -> ServerSentEvent.<String>builder()
+                    .data(line)
+                    .build()),
+            stream -> stream.close()
+        )
         .doOnError(e -> log.error("Streaming error", e))
         .doFinally(signal -> log.info("Stream completed"));
 }
 ```
 
-### 4. Critical ProcessBuilder Best Practices
+**Important Notes:**
+- **TRUE STREAMING**: Lines are emitted as the Claude Code CLI produces them, not after completion
+- **Resource Management**: Stream MUST be closed using try-with-resources or Flux.using()
+- **Timeout Enforcement**: Process is forcibly terminated if it exceeds the configured timeout
+- **Client Disconnect Handling**: Resources are cleaned up even if the client disconnects mid-stream
+
+### 4. Streaming Implementation Details (Phase 3 - Completed)
+
+The Java wrapper now implements **true line-by-line streaming** where output is processed as it arrives from the Claude Code CLI process, not after completion.
+
+#### How It Works
+
+1. **Process Startup**: ProcessBuilder creates Claude Code CLI process
+2. **Stream Creation**: BufferedReader wraps process InputStream
+3. **Line-by-Line Reading**: `reader.lines()` reads as lines arrive from CLI
+4. **Resource Management**: `StreamingProcessHandle` manages process lifecycle
+5. **Timeout Enforcement**: Background ScheduledExecutorService task kills process if timeout exceeded
+6. **Cleanup**: Stream.onClose() handler destroys process and closes reader
+
+#### Code Example - Standalone Usage
+
+```java
+// RECOMMENDED: Use try-with-resources
+try (Stream<String> lines = executor.executeStreaming("Analyze this code")) {
+    lines.forEach(line -> {
+        System.out.println("Received: " + line);
+        // Process each line as it arrives in real-time
+    });
+}
+// Stream automatically closed, process terminated
+
+// ANTI-PATTERN: Not closing the stream
+Stream<String> lines = executor.executeStreaming("Analyze code");
+lines.forEach(System.out::println);
+// BAD: Process continues running! Resource leak!
+```
+
+#### StreamingProcessHandle Implementation
+
+The implementation uses an inner class to manage process lifecycle:
+
+```java
+private static class StreamingProcessHandle implements AutoCloseable {
+    private final Process process;
+    private final ScheduledFuture<?> timeoutTask;
+    private final AtomicBoolean closed = new AtomicBoolean(false);
+    
+    public StreamingProcessHandle(Process process, Duration timeout) {
+        this.process = process;
+        
+        // Schedule timeout enforcement in background
+        this.timeoutTask = timeoutExecutor.schedule(() -> {
+            if (process.isAlive()) {
+                logger.warn("Process timed out, destroying");
+                process.destroyForcibly();
+            }
+        }, timeout.toMillis(), TimeUnit.MILLISECONDS);
+    }
+    
+    @Override
+    public void close() {
+        if (closed.compareAndSet(false, true)) {
+            timeoutTask.cancel(false);
+            if (process.isAlive()) {
+                process.destroy();
+                // Wait briefly for graceful termination
+                if (!process.waitFor(1, TimeUnit.SECONDS)) {
+                    process.destroyForcibly();
+                }
+            }
+        }
+    }
+}
+```
+
+#### Key Benefits
+
+1. **Real-Time Output**: Lines appear as Claude Code produces them
+2. **Lower Memory Usage**: No need to buffer entire output in memory
+3. **Better User Experience**: Users see progress immediately
+4. **Resource Safety**: Timeout prevents runaway processes
+5. **Spring WebFlux Compatible**: Works seamlessly with SSE endpoints
+6. **Proper Cleanup**: Resources released even if client disconnects
+
+#### Testing Streaming Behavior
+
+To verify true streaming (not buffered output):
+
+```bash
+# Use curl with -N flag (no buffering) and timestamp each line
+curl -N -X POST \
+  https://your-app.example.com/demo/execute-streaming \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"Write a story with 30 sentences, one per line"}' \
+  2>/dev/null | while IFS= read -r line; do
+    echo "[$(date +%H:%M:%S)] $line"
+  done
+```
+
+This will show timestamps proving lines arrive incrementally, not all at once.
+
+**Example Output (True Streaming):**
+```
+[10:23:45] Once upon a time in a small village...
+[10:23:46] The sun was setting over the mountains...
+[10:23:47] A young girl named Emma decided...
+```
+
+If all lines showed the same timestamp, that would indicate buffered output.
+
+### 5. Critical ProcessBuilder Best Practices
 
 When using `ProcessBuilder` to invoke Claude Code CLI, you **must** follow these patterns to avoid hangs and timeouts:
 
@@ -756,21 +945,25 @@ Custom or cloud-hosted MCP servers:
 
 ### Phase 3: Java Integration ✅ COMPLETED
 - [x] Develop Java wrapper library
-- [x] Implement streaming functionality
+- [x] Implement **true line-by-line streaming** functionality
 - [x] Create Spring Boot integration examples
-- [x] Add SSE support
+- [x] Add SSE support with proper resource management
 - [x] Create comprehensive documentation
 - [x] Develop sample applications
+- [x] Implement StreamingProcessHandle for lifecycle management
+- [x] Add background timeout enforcement for streaming
+- [x] Create StreamingExamples.java with 10 usage patterns
 
 **Status**: Phase 3 complete
 **Files**:
 - `java-wrapper/src/main/java/io/github/claudecode/cf/` (Core library - 4 classes)
 - `java-wrapper/src/main/java/io/github/claudecode/cf/spring/` (Spring Boot - 3 classes)
-- `java-wrapper/examples/spring-boot-app/` (Complete example application)
+- `java-wrapper/examples/spring-boot-app/` (Complete example application + StreamingExamples.java)
 - `java-wrapper/README.md` (Comprehensive documentation - 550 lines)
-- `java-wrapper/PHASE3_SUMMARY.md` (Implementation details)
-**Total**: 23 files, ~2,300 lines of code
-**See**: `java-wrapper/PHASE3_SUMMARY.md` for complete implementation details
+- `java-wrapper/STREAMING_IMPLEMENTATION.md` (Streaming implementation details)
+**Total**: 24 files, ~2,650 lines of code
+**Key Achievement**: True real-time streaming where lines are emitted as Claude Code produces them, not after completion
+**See**: `java-wrapper/STREAMING_IMPLEMENTATION.md` for complete streaming implementation details
 
 ### Phase 4: Security & Production Readiness (Week 4-5)
 - [ ] Implement security hardening
@@ -1085,8 +1278,13 @@ export NODE_EXTRA_CA_CERTS=/tmp/ca-bundle.crt
 
 ### Phase 3 Functionality (✅ Completed):
 - ✅ Java wrapper library for easier integration
-- ✅ Real-time streaming examples (SSE support)
-- ✅ Complete example applications
+- ✅ **True line-by-line streaming** from Process.getInputStream()
+- ✅ StreamingProcessHandle for process lifecycle management
+- ✅ Background timeout enforcement for streaming operations
+- ✅ Real-time SSE support with Flux.using() resource management
+- ✅ Complete example applications with 10 streaming patterns
+- ✅ Comprehensive JavaDoc emphasizing resource management
+- ✅ Spring Boot auto-configuration and REST controllers
 - ⏸ Integration tests with actual Cloud Foundry environment (Phase 4)
 
 ### Performance (To be measured in integration testing):
@@ -1095,11 +1293,13 @@ export NODE_EXTRA_CA_CERTS=/tmp/ca-bundle.crt
 - Memory overhead < 256MB
 - Buildpack staging time < 60s
 
-### Reliability (Implemented in Phase 1):
+### Reliability (Implemented in Phase 1 & 3):
 - ✅ Proper error handling in all scripts
 - ✅ Installation verification after each step
 - ✅ Graceful degradation (warnings vs. failures)
-- ⏸ Resource leak prevention (requires runtime testing)
+- ✅ Resource leak prevention via StreamingProcessHandle and timeout enforcement
+- ✅ Proper Stream cleanup with onClose() handlers
+- ⏸ Long-running resource leak testing (requires extended runtime testing)
 
 ### Security (✅ Phase 1 & 2 Complete):
 - ✅ No exposed API keys in logs (masked in all output)
@@ -1137,17 +1337,22 @@ This buildpack enables seamless integration of Claude Code CLI into Cloud Foundr
   - Python-based YAML parser
 
 **Phase 3:** Java Integration
-- Implementation: Complete (23 files, ~2,300 LOC)
+- Implementation: Complete (24 files, ~2,650 LOC)
 - Testing: Ready for integration testing
-- Documentation: java-wrapper/README.md (550 lines), PHASE3_SUMMARY.md
+- Documentation: java-wrapper/README.md (550 lines), STREAMING_IMPLEMENTATION.md
 - Features:
   - Java wrapper library with 3 execution modes
+  - **True line-by-line streaming** implementation
+  - StreamingProcessHandle for process lifecycle management
+  - Background timeout enforcement via ScheduledExecutorService
   - Spring Boot auto-configuration
   - REST API controller with 4 endpoints
   - Configuration options builder
   - Comprehensive error handling
+  - StreamingExamples.java with 10 usage patterns
   - Complete example application
   - ProcessBuilder best practices implementation
+  - Flux.using() resource management for Spring WebFlux
 
 ### Next Steps
 
@@ -1176,8 +1381,13 @@ This buildpack enables seamless integration of Claude Code CLI into Cloud Foundr
 - ✅ Flexible YAML-based configuration
 - ✅ Production-ready Phases 1, 2 & 3 implementation
 - ✅ Java wrapper library with Spring Boot integration
+- ✅ **True line-by-line streaming** from Process.getInputStream()
 - ✅ Complete documentation with working examples
 - ✅ REST API with synchronous, async, and streaming modes
+- ✅ Proper resource management with StreamingProcessHandle
+- ✅ Background timeout enforcement prevents runaway processes
+- ✅ Spring WebFlux integration with Flux.using() pattern
+- ✅ 10 comprehensive streaming usage examples
 
 ---
 

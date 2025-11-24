@@ -78,6 +78,11 @@ public class DemoController {
 
     /**
      * Execute a prompt with streaming output.
+     * <p>
+     * This demonstrates true real-time streaming where output lines are sent to the
+     * client as they are produced by the Claude Code CLI process. The Stream is
+     * properly managed using Flux.using() to ensure resources are cleaned up.
+     * </p>
      * 
      * Example: POST /demo/execute-streaming
      * Body: { "prompt": "Refactor this Java code to improve readability: public void test() { ... }" }
@@ -92,10 +97,21 @@ public class DemoController {
         
         logger.info("Executing prompt with streaming: {}", prompt.substring(0, Math.min(50, prompt.length())));
         
-        return Flux.fromStream(() -> executor.executeStreaming(prompt))
-            .delayElements(Duration.ofMillis(10))
-            .doOnError(e -> logger.error("Streaming error", e))
-            .doOnComplete(() -> logger.info("Streaming completed"));
+        // Use Flux.using() to ensure the Stream is properly closed
+        return Flux.using(
+            // Resource supplier: create the Stream
+            () -> executor.executeStreaming(prompt),
+            // Flux generator: convert Stream to Flux
+            stream -> Flux.fromStream(stream),
+            // Cleanup: close the Stream when done
+            stream -> {
+                logger.debug("Closing stream");
+                stream.close();
+            }
+        )
+        .doOnError(e -> logger.error("Streaming error", e))
+        .doOnComplete(() -> logger.info("Streaming completed"))
+        .doOnCancel(() -> logger.info("Streaming cancelled by client"));
     }
 
     /**

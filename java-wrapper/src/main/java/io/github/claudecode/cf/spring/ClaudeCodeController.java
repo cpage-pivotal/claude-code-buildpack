@@ -120,12 +120,15 @@ public class ClaudeCodeController {
     /**
      * Execute a Claude Code command with Server-Sent Events streaming.
      * <p>
-     * This endpoint streams the output line-by-line as it becomes available.
-     * Ideal for long-running commands or when you want to display progress in real-time.
+     * This endpoint streams the output line-by-line as it becomes available from
+     * the Claude Code CLI process. This provides true real-time streaming where
+     * output is sent to the client as soon as it's produced.
      * </p>
      * <p>
      * The response uses the text/event-stream content type, allowing clients to
-     * receive updates as they happen.
+     * receive updates as they happen. The underlying Stream is properly managed
+     * using Flux.using() to ensure resources are cleaned up when streaming completes
+     * or when the client disconnects.
      * </p>
      *
      * @param request the prompt request
@@ -137,10 +140,22 @@ public class ClaudeCodeController {
         
         ClaudeCodeOptions options = buildOptions(request);
         
-        return Flux.fromStream(() -> executor.executeStreaming(request.getPrompt(), options))
-            .delayElements(Duration.ofMillis(10)) // Smooth streaming
-            .doOnError(e -> logger.error("Streaming error", e))
-            .doOnComplete(() -> logger.info("Streaming completed"));
+        // Use Flux.using() for proper resource management
+        // This ensures the Stream is closed even if the client disconnects
+        return Flux.using(
+            // Resource supplier: create the Stream
+            () -> executor.executeStreaming(request.getPrompt(), options),
+            // Flux generator: convert Stream to Flux
+            stream -> Flux.fromStream(stream),
+            // Cleanup: close the Stream when done
+            stream -> {
+                logger.debug("Closing stream due to completion or cancellation");
+                stream.close();
+            }
+        )
+        .doOnError(e -> logger.error("Streaming error", e))
+        .doOnComplete(() -> logger.info("Streaming completed"))
+        .doOnCancel(() -> logger.info("Streaming cancelled by client"));
     }
 
     /**
