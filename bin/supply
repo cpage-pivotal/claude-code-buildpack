@@ -51,6 +51,22 @@ setup_environment "${DEPS_INDEX_DIR}" "${BUILD_DIR}" "${INDEX}"
 echo "       Creating configuration files..."
 create_config_files "${DEPS_INDEX_DIR}" "${BUILD_DIR}"
 
+# Extract .claude-code-config.yml from JAR if it's a Spring Boot application
+if [ ! -f "${BUILD_DIR}/.claude-code-config.yml" ]; then
+    echo "       Checking for config in JAR files..."
+    # Find JAR files in the build directory
+    for jar_file in "${BUILD_DIR}"/*.jar; do
+        if [ -f "${jar_file}" ]; then
+            echo "       Found JAR: $(basename ${jar_file})"
+            # Try to extract .claude-code-config.yml from the JAR root
+            if unzip -p "${jar_file}" .claude-code-config.yml > "${BUILD_DIR}/.claude-code-config.yml" 2>/dev/null; then
+                echo "       Extracted .claude-code-config.yml from JAR"
+                break
+            fi
+        fi
+    done
+fi
+
 # Configure Claude Code (MCP servers and settings)
 configure_claude_code "${BUILD_DIR}"
 

@@ -112,13 +112,20 @@ claude-code-buildpack/
 ### 2. Detection Logic (`bin/detect`)
 
 The buildpack should detect when:
-- The application has `claude-code-enabled: true` in manifest.yml, OR
 - The application includes a `.claude-code-config.yml` file in the root, OR
-- Environment variable `CLAUDE_CODE_ENABLED=true` is set
+- The application is a JAR file containing `.claude-code-config.yml` (Spring Boot apps), OR
+- Environment variable `CLAUDE_CODE_ENABLED=true` is set, OR
+- The application has `claude-code-enabled: true` in manifest.yml
 
 **Exit Codes:**
 - 0: Apply this buildpack
 - 1: Skip this buildpack
+
+**Spring Boot JAR Support:**
+For Spring Boot applications, the `.claude-code-config.yml` file can be packaged inside the JAR at the root level. The buildpack will:
+1. Check for the config file in BUILD_DIR first
+2. If not found, search JAR files and extract the config file
+3. Use the extracted config for MCP and settings generation
 
 **Output:**
 - Buildpack name and version to stdout
