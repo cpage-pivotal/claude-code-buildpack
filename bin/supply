@@ -51,8 +51,8 @@ setup_environment "${DEPS_INDEX_DIR}" "${BUILD_DIR}" "${INDEX}"
 echo "       Creating configuration files..."
 create_config_files "${DEPS_INDEX_DIR}" "${BUILD_DIR}"
 
-# Configure MCP servers
-configure_mcp_servers "${BUILD_DIR}"
+# Configure Claude Code (MCP servers and settings)
+configure_claude_code "${BUILD_DIR}"
 
 # Verify installation
 echo "       Verifying installation..."

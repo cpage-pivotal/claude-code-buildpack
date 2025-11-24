@@ -10,25 +10,26 @@ claudeCode:
   # Use "latest" for the newest version, or specify a version like "2.0.50"
   version: "latest"
 
-  # Authentication
-  authentication:
-    # API key - references the ANTHROPIC_API_KEY environment variable
-    # It's recommended to set this via environment variables for security
-    apiKey: ${ANTHROPIC_API_KEY}
+  # Log level for Claude Code CLI
+  logLevel: "info"          # debug, info, warn, error
+  
+  # Default model to use
+  model: "sonnet"            # sonnet, opus, haiku
 
-  # CLI behavior settings
+  # Claude settings for improved performance
+  # These settings are written to ~/.claude/settings.json
   settings:
-    logLevel: "info"          # debug, info, warn, error
-    model: "sonnet"            # sonnet, opus, haiku
-    outputFormat: "text"       # text, json
+    # Enable extended thinking mode for better multi-step reasoning
+    # This significantly improves performance for complex operations
+    alwaysThinkingEnabled: true
 
   # MCP (Model Context Protocol) Servers
-  # Note: Full MCP configuration will be implemented in Phase 2
-  # For now, this is a placeholder for future functionality
+  # Configure MCP servers to extend Claude Code capabilities
   mcpServers: []
 
-  # Example MCP servers (will be implemented in Phase 2):
+  # Example MCP server configurations:
   #
+  # Local stdio MCP servers:
   # mcpServers:
   #   - name: filesystem
   #     type: stdio
@@ -47,3 +48,9 @@ claudeCode:
   #       - "@modelcontextprotocol/server-github"
   #     env:
   #       GITHUB_PERSONAL_ACCESS_TOKEN: ${GITHUB_TOKEN}
+  #
+  # Remote SSE MCP servers:
+  #   - name: github
+  #     type: sse
+  #     url: "https://github-mcp-server.example.com/sse"
+

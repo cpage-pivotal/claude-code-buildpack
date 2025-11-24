@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# lib/mcp_configurator.sh: MCP server configuration parsing and .claude.json generation
+# lib/mcp_configurator.sh: Claude Code configuration management
+# Handles both MCP server configuration and Claude settings generation
 
 # Parse Claude Code configuration settings from .claude-code-config.yml
 # Extracts logLevel, version, model, etc.
@@ -233,15 +234,21 @@ EOF
     return 1
 }
 
-# Generate .claude.json configuration file
+# Generate .claude/mcp.json configuration file
+# Note: Claude Code uses .claude/mcp.json for MCP server configuration,
+# while .claude.json is used for internal CLI state
 generate_claude_json() {
     local build_dir=$1
-    local output_file="${build_dir}/.claude.json"
+    local claude_dir="${build_dir}/.claude"
+    local output_file="${claude_dir}/mcp.json"
+    
+    # Create .claude directory if it doesn't exist
+    mkdir -p "${claude_dir}"
 
     # Try to parse .claude-code-config.yml first
     if parse_claude_code_config "${build_dir}"; then
         if extract_mcp_servers "${CLAUDE_CODE_CONFIG_FILE}" "${output_file}"; then
-            echo "       Created .claude.json from .claude-code-config.yml"
+            echo "       Created .claude/mcp.json from .claude-code-config.yml"
             return 0
         fi
     fi
@@ -249,35 +256,84 @@ generate_claude_json() {
     # Try to parse manifest.yml (won't work in CF but included for completeness)
     if parse_manifest_config "${build_dir}"; then
         if extract_mcp_servers "${CLAUDE_CODE_MANIFEST_CONFIG}" "${output_file}"; then
-            echo "       Created .claude.json from manifest.yml"
+            echo "       Created .claude/mcp.json from manifest.yml"
             return 0
         fi
     fi
 
-    # No configuration found - create empty .claude.json
+    # No configuration found - create empty .claude/mcp.json
     cat > "${output_file}" <<'EOF'
 {
   "mcpServers": {}
 }
 EOF
 
-    echo "       Created empty .claude.json (no MCP configuration found)"
+    echo "       Created empty .claude/mcp.json (no MCP configuration found)"
+    return 0
+}
+
+# Generate .claude/settings.json from configuration
+# This creates Claude Code settings like alwaysThinkingEnabled
+generate_claude_settings_json() {
+    local build_dir=$1
+    local settings_dir="${build_dir}/.claude"
+    local settings_file="${settings_dir}/settings.json"
+    
+    # Create .claude directory if it doesn't exist
+    mkdir -p "${settings_dir}"
+    
+    echo "-----> Generating Claude settings configuration"
+    
+    # Check if config file specifies settings
+    if [ -n "${CLAUDE_CODE_CONFIG_FILE}" ] && [ -f "${CLAUDE_CODE_CONFIG_FILE}" ]; then
+        # Check if settings section exists
+        if grep -q "^\s*settings:" "${CLAUDE_CODE_CONFIG_FILE}"; then
+            # Parse alwaysThinkingEnabled setting
+            local always_thinking=$(grep -A 5 "^\s*settings:" "${CLAUDE_CODE_CONFIG_FILE}" | \
+                                   grep "alwaysThinkingEnabled:" | \
+                                   awk -F": " '{print $2}' | \
+                                   tr -d ' "' | \
+                                   head -1)
+            
+            if [ -n "${always_thinking}" ]; then
+                echo "       Configuring alwaysThinkingEnabled: ${always_thinking}"
+                cat > "${settings_file}" <<EOF
+{
+  "alwaysThinkingEnabled": ${always_thinking}
+}
+EOF
+                echo "       Created ${settings_file}"
+                return 0
+            fi
+        fi
+    fi
+    
+    # If no settings specified, create default with alwaysThinkingEnabled: true
+    # This improves multi-step operation performance in Cloud Foundry
+    echo "       Using default settings with extended thinking enabled"
+    cat > "${settings_file}" <<'EOF'
+{
+  "alwaysThinkingEnabled": true
+}
+EOF
+    
+    echo "       Created ${settings_file} with default configuration"
     return 0
 }
 
 # Validate MCP server configuration
 validate_mcp_config() {
     local build_dir=$1
-    local config_file="${build_dir}/.claude.json"
+    local config_file="${build_dir}/.claude/mcp.json"
 
     if [ ! -f "${config_file}" ]; then
-        echo "       WARNING: .claude.json not found"
+        echo "       WARNING: .claude/mcp.json not found"
         return 1
     fi
 
     # Basic validation - check JSON structure
     if ! grep -q '"mcpServers"' "${config_file}"; then
-        echo "       WARNING: .claude.json missing mcpServers section"
+        echo "       WARNING: .claude/mcp.json missing mcpServers section"
         return 1
     fi
 
@@ -288,25 +344,50 @@ validate_mcp_config() {
     if [ "${server_count}" -eq 0 ] 2>/dev/null; then
         echo "       No MCP servers configured (using empty configuration)"
     else
-        echo "       Validated .claude.json with ${server_count} MCP server(s)"
+        echo "       Validated .claude/mcp.json with ${server_count} MCP server(s)"
     fi
 
     return 0
 }
 
-# Main configuration function to be called from supply script
+# Generate MCP server configuration (.claude/mcp.json)
 configure_mcp_servers() {
     local build_dir=$1
 
     echo "-----> Configuring MCP servers"
 
-    # Generate .claude.json
+    # Generate .claude/mcp.json
     if ! generate_claude_json "${build_dir}"; then
-        echo "       WARNING: Failed to generate .claude.json, using empty configuration"
+        echo "       WARNING: Failed to generate .claude/mcp.json, using empty configuration"
     fi
 
     # Validate configuration
     validate_mcp_config "${build_dir}"
+
+    return 0
+}
+
+# Generate Claude settings configuration (.claude/settings.json)
+configure_claude_settings() {
+    local build_dir=$1
+
+    echo "-----> Configuring Claude settings"
+
+    # Generate .claude/settings.json
+    generate_claude_settings_json "${build_dir}"
+
+    return 0
+}
+
+# Main configuration function - configures both MCP servers and Claude settings
+configure_claude_code() {
+    local build_dir=$1
+
+    # Configure MCP servers (.claude.json)
+    configure_mcp_servers "${build_dir}"
+
+    # Configure Claude settings (.claude/settings.json)
+    configure_claude_settings "${build_dir}"
 
     return 0
 }

@@ -159,12 +159,21 @@ claudeCode:
   # Default: sonnet
   model: sonnet
 
+  # Claude settings (written to ~/.claude/settings.json)
+  settings:
+    # Enable extended thinking for complex multi-step operations
+    # Significantly improves performance for tasks like "Review issue AND add comment"
+    # Default: true (automatically enabled by buildpack)
+    alwaysThinkingEnabled: true
+
   # MCP servers configuration (see MCP section below)
   mcpServers:
     # ...
 ```
 
 **Setting Priority:** Configuration file values take precedence over environment variables, which take precedence over defaults.
+
+**Note on Performance:** The `alwaysThinkingEnabled: true` setting is crucial for complex multi-step operations in Cloud Foundry. Without it, operations that complete in <30 seconds locally may timeout after 3 minutes. The buildpack sets this to `true` by default to optimize performance.
 
 ### Environment Variables
 
