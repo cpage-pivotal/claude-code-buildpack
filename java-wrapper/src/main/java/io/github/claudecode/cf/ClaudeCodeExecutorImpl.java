@@ -10,9 +10,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 
 /**
@@ -49,6 +48,14 @@ import java.util.stream.Stream;
 public class ClaudeCodeExecutorImpl implements ClaudeCodeExecutor {
 
     private static final Logger logger = LoggerFactory.getLogger(ClaudeCodeExecutorImpl.class);
+    
+    // Shared executor service for timeout management
+    private static final ScheduledExecutorService timeoutExecutor = 
+        Executors.newScheduledThreadPool(2, r -> {
+            Thread t = new Thread(r, "claude-code-timeout");
+            t.setDaemon(true);
+            return t;
+        });
     
     private final String claudePath;
     private final Map<String, String> baseEnvironment;
@@ -196,11 +203,50 @@ public class ClaudeCodeExecutorImpl implements ClaudeCodeExecutor {
         validatePrompt(prompt);
         Objects.requireNonNull(options, "Options cannot be null");
         
-        // For streaming, we execute and split into lines
-        // A more sophisticated implementation could use Process.getInputStream()
-        // to stream lines as they arrive
-        String result = execute(prompt, options);
-        return Arrays.stream(result.split("\n"));
+        logger.debug("Starting streaming execution with prompt length: {}, options: {}", 
+                    prompt.length(), options);
+
+        List<String> command = buildCommand(prompt, options);
+        ProcessBuilder pb = new ProcessBuilder(command);
+        
+        // Add environment variables to subprocess
+        Map<String, String> env = pb.environment();
+        env.putAll(baseEnvironment);
+        env.putAll(options.getAdditionalEnv());
+        
+        // CRITICAL: Redirect stderr to stdout to prevent buffer deadlock
+        pb.redirectErrorStream(true);
+        
+        try {
+            Process process = pb.start();
+            
+            // CRITICAL: Close stdin immediately so CLI doesn't wait for input
+            process.getOutputStream().close();
+            
+            // Create streaming handle for resource management
+            StreamingProcessHandle handle = new StreamingProcessHandle(process, options.getTimeout());
+            
+            // Create stream that reads lines as they arrive
+            BufferedReader reader = new BufferedReader(
+                new InputStreamReader(process.getInputStream())
+            );
+            
+            // Return stream with proper cleanup handlers
+            return reader.lines()
+                .onClose(() -> {
+                    logger.debug("Stream closed, cleaning up resources");
+                    handle.close();
+                    try {
+                        reader.close();
+                    } catch (IOException e) {
+                        logger.warn("Error closing reader", e);
+                    }
+                });
+            
+        } catch (IOException e) {
+            logger.error("Failed to start streaming execution", e);
+            throw new ClaudeCodeExecutionException("Failed to start Claude Code streaming", e);
+        }
     }
 
     @Override
@@ -359,5 +405,73 @@ public class ClaudeCodeExecutorImpl implements ClaudeCodeExecutor {
             return ".../" + path.substring(lastSlash + 1);
         }
         return path;
+    }
+
+    /**
+     * Inner class to manage streaming process lifecycle and timeout enforcement.
+     * <p>
+     * This class ensures that:
+     * </p>
+     * <ul>
+     *   <li>Process is terminated when no longer needed</li>
+     *   <li>Timeout is enforced by forcibly destroying the process</li>
+     *   <li>Resources are cleaned up even if stream is not properly closed</li>
+     * </ul>
+     */
+    private static class StreamingProcessHandle implements AutoCloseable {
+        private final Process process;
+        private final ScheduledFuture<?> timeoutTask;
+        private final AtomicBoolean closed = new AtomicBoolean(false);
+
+        /**
+         * Creates a new streaming process handle with timeout enforcement.
+         *
+         * @param process the process to manage
+         * @param timeout the maximum duration before forcibly terminating the process
+         */
+        public StreamingProcessHandle(Process process, java.time.Duration timeout) {
+            this.process = process;
+            
+            // Schedule timeout task to forcibly destroy process if it runs too long
+            this.timeoutTask = timeoutExecutor.schedule(() -> {
+                if (process.isAlive()) {
+                    logger.warn("Streaming process timed out after {}, forcibly destroying", timeout);
+                    process.destroyForcibly();
+                }
+            }, timeout.toMillis(), TimeUnit.MILLISECONDS);
+            
+            logger.debug("Created streaming process handle with timeout: {}", timeout);
+        }
+
+        @Override
+        public void close() {
+            if (closed.compareAndSet(false, true)) {
+                logger.debug("Closing streaming process handle");
+                
+                // Cancel timeout task
+                timeoutTask.cancel(false);
+                
+                // Destroy process if still alive
+                if (process.isAlive()) {
+                    logger.debug("Process still alive, destroying gracefully");
+                    process.destroy();
+                    
+                    // Give it a moment to terminate gracefully
+                    try {
+                        boolean terminated = process.waitFor(1, TimeUnit.SECONDS);
+                        if (!terminated) {
+                            logger.warn("Process did not terminate gracefully, forcing");
+                            process.destroyForcibly();
+                        }
+                    } catch (InterruptedException e) {
+                        logger.warn("Interrupted while waiting for process termination", e);
+                        Thread.currentThread().interrupt();
+                        process.destroyForcibly();
+                    }
+                } else {
+                    logger.debug("Process already terminated with exit code: {}", process.exitValue());
+                }
+            }
+        }
     }
 }
