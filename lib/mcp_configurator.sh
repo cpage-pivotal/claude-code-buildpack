@@ -12,21 +12,21 @@ parse_config_settings() {
     fi
 
     # Parse logLevel setting
-    local log_level=$(grep -E "^\s*logLevel:" "${config_file}" | sed -E 's/^\s*logLevel:\s*(.+)\s*$/\1/' | tr -d '"' | tr -d "'")
+    local log_level=$(grep -E "^[[:space:]]*logLevel:" "${config_file}" | sed -E 's/^[[:space:]]*logLevel:[[:space:]]*(.+)[[:space:]]*$/\1/' | tr -d '"' | tr -d "'")
     if [ -n "${log_level}" ]; then
         export CLAUDE_CODE_LOG_LEVEL="${log_level}"
         echo "       Setting log level: ${log_level}"
     fi
 
     # Parse version setting
-    local version=$(grep -E "^\s*version:" "${config_file}" | sed -E 's/^\s*version:\s*(.+)\s*$/\1/' | tr -d '"' | tr -d "'")
+    local version=$(grep -E "^[[:space:]]*version:" "${config_file}" | sed -E 's/^[[:space:]]*version:[[:space:]]*(.+)[[:space:]]*$/\1/' | tr -d '"' | tr -d "'")
     if [ -n "${version}" ]; then
         export CLAUDE_CODE_VERSION="${version}"
         echo "       Setting Claude Code version: ${version}"
     fi
 
     # Parse model setting
-    local model=$(grep -E "^\s*model:" "${config_file}" | sed -E 's/^\s*model:\s*(.+)\s*$/\1/' | tr -d '"' | tr -d "'")
+    local model=$(grep -E "^[[:space:]]*model:" "${config_file}" | sed -E 's/^[[:space:]]*model:[[:space:]]*(.+)[[:space:]]*$/\1/' | tr -d '"' | tr -d "'")
     if [ -n "${model}" ]; then
         export CLAUDE_CODE_MODEL="${model}"
         echo "       Setting Claude Code model: ${model}"
