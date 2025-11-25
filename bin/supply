@@ -60,7 +60,12 @@ if [ ! -f "${BUILD_DIR}/.claude-code-config.yml" ]; then
             echo "       Found JAR: $(basename ${jar_file})"
             # Try to extract .claude-code-config.yml from the JAR root
             if unzip -p "${jar_file}" .claude-code-config.yml > "${BUILD_DIR}/.claude-code-config.yml" 2>/dev/null; then
-                echo "       Extracted .claude-code-config.yml from JAR"
+                echo "       Extracted .claude-code-config.yml from JAR root"
+                break
+            fi
+            # Try to extract from Spring Boot JAR structure (BOOT-INF/classes/)
+            if unzip -p "${jar_file}" BOOT-INF/classes/.claude-code-config.yml > "${BUILD_DIR}/.claude-code-config.yml" 2>/dev/null; then
+                echo "       Extracted .claude-code-config.yml from BOOT-INF/classes/"
                 break
             fi
         fi
