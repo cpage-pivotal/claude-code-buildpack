@@ -32,56 +32,47 @@ applications:
 
 **Important**: The buildpack order matters! Node.js must come first, then Claude Code, then Java.
 
-## Step 3: Configure Maven for JAR Deployment
+## Step 3: Add Configuration File
 
-For Spring Boot applications, you must embed the config file in your JAR. Add this plugin to your `pom.xml`:
+Create a `.claude-code-config.yml` file in your Spring Boot resources directory:
 
-```xml
-<build>
-    <plugins>
-        <plugin>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-maven-plugin</artifactId>
-        </plugin>
-
-        <!-- Add config file to JAR root after Spring Boot repackaging -->
-        <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-antrun-plugin</artifactId>
-            <version>3.1.0</version>
-            <executions>
-                <execution>
-                    <id>add-config-to-jar</id>
-                    <phase>package</phase>
-                    <goals>
-                        <goal>run</goal>
-                    </goals>
-                    <configuration>
-                        <target>
-                            <jar destfile="${project.build.directory}/${project.build.finalName}.jar" update="true">
-                                <fileset dir="${project.basedir}" includes=".claude-code-config.yml"/>
-                            </jar>
-                        </target>
-                    </configuration>
-                </execution>
-            </executions>
-        </plugin>
-    </plugins>
-</build>
+```bash
+# Create config in src/main/resources/
+mkdir -p src/main/resources
+cat > src/main/resources/.claude-code-config.yml <<EOF
+claudeCode:
+  enabled: true
+  version: "latest"
+  logLevel: info
+  model: sonnet
+  
+  settings:
+    alwaysThinkingEnabled: true
+  
+  mcpServers: []
+EOF
 ```
+
+Spring Boot will automatically include this in your JAR at `BOOT-INF/classes/.claude-code-config.yml`, and the buildpack will find it during Cloud Foundry deployment.
 
 ## Step 4: Build and Verify
 
-Build your application and verify the config file is properly embedded:
+Build your application:
 
 ```bash
 mvn clean package
-
-# Verify config is at JAR root (not in BOOT-INF/classes/)
-jar tf target/my-app.jar | head -20
 ```
 
-You should see `.claude-code-config.yml` listed at the root of the JAR, **not** inside `BOOT-INF/classes/`.
+Verify the config file is included in your JAR:
+
+```bash
+unzip -l target/my-app.jar | grep claude-code-config
+```
+
+You should see:
+```
+203  11-25-2025 08:45   BOOT-INF/classes/.claude-code-config.yml
+```
 
 ## Step 5: Deploy
 

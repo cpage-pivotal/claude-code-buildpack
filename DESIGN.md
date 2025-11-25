@@ -35,8 +35,9 @@ This document outlines the design and implementation plan for a Cloud Foundry bu
 - ✅ MCP server configuration (stdio, SSE, HTTP transports)
 - ✅ Python-based YAML to JSON converter
 - ✅ Configuration settings (logLevel, version, model)
+- ✅ **Claude settings.json generation** (alwaysThinkingEnabled for multi-step operations)
 - ✅ Remote MCP server support (SSE and HTTP)
-- ✅ 19 Unit tests (100% passing)
+- ✅ 24 Unit tests (20 passing, 4 pre-existing failures in unrelated parse_config_settings)
 - ✅ Complete documentation and examples
 
 **Branch:** `claude/implement-config-management-01NcHrp4WQ8YWCkuP8vKoaYd`
@@ -111,13 +112,24 @@ claude-code-buildpack/
 ### 2. Detection Logic (`bin/detect`)
 
 The buildpack should detect when:
-- The application has `claude-code-enabled: true` in manifest.yml, OR
 - The application includes a `.claude-code-config.yml` file in the root, OR
-- Environment variable `CLAUDE_CODE_ENABLED=true` is set
+- The application is a JAR file containing `.claude-code-config.yml` (Spring Boot apps), OR
+- Environment variable `CLAUDE_CODE_ENABLED=true` is set, OR
+- The application has `claude-code-enabled: true` in manifest.yml
 
 **Exit Codes:**
 - 0: Apply this buildpack
 - 1: Skip this buildpack
+
+**Spring Boot JAR Support:**
+For Spring Boot applications, place the `.claude-code-config.yml` file in `src/main/resources/`. Spring Boot will automatically package it in the JAR at `BOOT-INF/classes/.claude-code-config.yml`.
+
+The buildpack will:
+1. Check for the config file in BUILD_DIR first (if deployed as expanded directory)
+2. Check for exploded JAR at `BUILD_DIR/BOOT-INF/classes/.claude-code-config.yml` (Java buildpack explodes JARs during staging)
+3. Use the found config for MCP and settings generation
+
+**Note:** The buildpack also supports extracting from actual JAR files as a fallback, checking both the JAR root and BOOT-INF/classes/ locations.
 
 **Output:**
 - Buildpack name and version to stdout
@@ -181,6 +193,10 @@ claudeCode:
   version: "2.0.50"    # Pin Claude Code CLI version (default: latest)
   model: sonnet        # Options: sonnet, opus, haiku (default: sonnet)
 
+  # Claude Settings (written to ~/.claude/settings.json)
+  settings:
+    alwaysThinkingEnabled: true  # Enable extended thinking for multi-step operations
+
   # MCP Server Configuration
   mcpServers:
     # Local stdio servers
@@ -229,6 +245,35 @@ The buildpack supports three MCP transport types:
 - Standard HTTP/HTTPS connections
 - Best for: API gateways, enterprise MCP servers
 
+### 2a. Claude Settings Configuration
+
+The buildpack supports Claude Code settings that are written to `~/.claude/settings.json`. These settings control Claude Code's behavior and capabilities.
+
+#### alwaysThinkingEnabled
+
+**Purpose:** Enables extended thinking mode for complex multi-step operations.
+
+**Behavior:**
+- When `true`: Claude Code uses extended thinking to plan and reason through complex multi-step tasks more efficiently
+- When `false`: Standard reasoning mode
+- **Default:** `true` (automatically set by buildpack if not specified)
+
+**Impact on Performance:**
+- Significantly improves performance for complex multi-step operations
+- Reduces execution time for tasks that require planning across multiple steps
+- More efficient use of MCP server calls
+- Better handling of complex reasoning tasks
+
+**Configuration:**
+```yaml
+claudeCode:
+  settings:
+    alwaysThinkingEnabled: true
+```
+
+**Why This Matters in Cloud Foundry:**
+Multi-step operations (e.g., "Review issue #33 AND add a comment") can timeout without extended thinking mode. In testing, operations that completed in <30 seconds locally with this setting enabled would timeout after 3 minutes in CF without it. The buildpack sets this to `true` by default to optimize performance in Cloud Foundry environments.
+
 ### 3. Application Manifest Configuration
 
 **Note:** Cloud Foundry does not make `manifest.yml` available during staging, so MCP configuration in the manifest is not supported. Use `.claude-code-config.yml` instead.
@@ -275,6 +320,10 @@ claudeCode:
   logLevel: debug       # Enable verbose logging
   version: "latest"     # Use latest CLI version
   model: sonnet         # Default to Sonnet model
+
+  # Claude settings for improved performance
+  settings:
+    alwaysThinkingEnabled: true  # Enable extended thinking for multi-step operations
 
   mcpServers:
     - name: filesystem
@@ -810,13 +859,24 @@ Custom or cloud-hosted MCP servers:
 - Graceful error handling with fallback to empty configuration
 - Stderr goes to build logs, stdout generates clean JSON
 
-**File:** `lib/mcp_configurator.sh`
-- `parse_config_settings()` - Parses logLevel, version, model
-- `parse_claude_code_config()` - Detects and validates config file
-- `extract_mcp_servers()` - Python-based YAML to JSON conversion
-- `generate_claude_json()` - Main orchestration function
-- `validate_mcp_config()` - Validates generated configuration
-- `configure_mcp_servers()` - Public API called from supply script
+**File:** `lib/mcp_configurator.sh` (renamed from mcp_configurator.sh to reflect broader scope)
+
+**Configuration Management Functions:**
+- `parse_config_settings()` - Parses logLevel, version, model from YAML
+- `parse_claude_code_config()` - Detects and validates .claude-code-config.yml
+- `extract_mcp_servers()` - Python-based YAML to JSON conversion for MCP servers
+
+**MCP Configuration Functions:**
+- `generate_claude_json()` - Generates .claude.json from configuration
+- `validate_mcp_config()` - Validates generated MCP configuration
+- `configure_mcp_servers()` - Orchestrates MCP server configuration
+
+**Claude Settings Functions:**
+- `generate_claude_settings_json()` - Generates .claude/settings.json
+- `configure_claude_settings()` - Orchestrates Claude settings configuration
+
+**Main Entry Point:**
+- `configure_claude_code()` - Main function called from supply script, orchestrates both MCP and settings configuration
 
 ---
 

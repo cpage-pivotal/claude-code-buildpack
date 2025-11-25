@@ -17,6 +17,16 @@ if [ -f "${BUILD_DIR}/.claude-code-config.yml" ]; then
     exit 0
 fi
 
+# Check for .claude-code-config.yml inside JAR files (Spring Boot apps)
+for jar_file in "${BUILD_DIR}"/*.jar; do
+    if [ -f "${jar_file}" ]; then
+        if unzip -l "${jar_file}" 2>/dev/null | grep -q "\.claude-code-config\.yml"; then
+            echo "${BUILDPACK_NAME} ${BUILDPACK_VERSION}"
+            exit 0
+        fi
+    fi
+done
+
 # Check for CLAUDE_CODE_ENABLED environment variable
 if [ "${CLAUDE_CODE_ENABLED}" == "true" ]; then
     echo "${BUILDPACK_NAME} ${BUILDPACK_VERSION}"
