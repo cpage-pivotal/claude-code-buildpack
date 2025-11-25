@@ -801,27 +801,39 @@ claudeCode:
 **Output (.claude.json):**
 ```json
 {
-  "mcpServers": {
-    "filesystem": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem"],
-      "env": {
-        "ALLOWED_DIRECTORIES": "/home/vcap/app,/tmp"
-      }
-    },
-    "remote-api": {
-      "type": "sse",
-      "url": "https://mcp.example.com/sse",
-      "env": {
-        "API_TOKEN": "${SERVICE_TOKEN}"
-      }
+  "projects": {
+    "/home/vcap/app": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {
+        "filesystem": {
+          "type": "stdio",
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+          "env": {
+            "ALLOWED_DIRECTORIES": "/home/vcap/app,/tmp"
+          }
+        },
+        "remote-api": {
+          "type": "sse",
+          "url": "https://mcp.example.com/sse",
+          "env": {
+            "API_TOKEN": "${SERVICE_TOKEN}"
+          }
+        }
+      },
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": false,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false
     }
   }
 }
 ```
 
-The configuration file is placed at `/home/vcap/app/.claude.json` and used by Claude Code CLI at runtime.
+The configuration file is placed at `/home/vcap/app/.claude.json` and used by Claude Code CLI at runtime. The `mcpServers` are nested under a `projects` section with the project path as the key.
 
 ### 2. Supported MCP Server Types
 

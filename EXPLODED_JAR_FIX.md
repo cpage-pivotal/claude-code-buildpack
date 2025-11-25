@@ -136,8 +136,8 @@ Setting log level: info
 Setting Claude Code version: latest
 Setting Claude Code model: sonnet
 Generated .claude.json with MCP server configuration
-Created .claude/mcp.json from .claude-code-config.yml
-Validated .claude/mcp.json with 1 MCP server(s)
+Created .claude.json from .claude-code-config.yml
+Validated .claude.json with 1 MCP server(s)
 -----> Configuring Claude settings
 -----> Generating Claude settings configuration
 Using default settings with extended thinking enabled
@@ -150,8 +150,8 @@ Version: 2.0.53 (Claude Code)
 
 Key indicators of success:
 - ✅ `Found .claude-code-config.yml in exploded JAR (BOOT-INF/classes/)`
-- ✅ `Created .claude/mcp.json from .claude-code-config.yml`
-- ✅ `Validated .claude/mcp.json with 1 MCP server(s)`
+- ✅ `Created .claude.json from .claude-code-config.yml`
+- ✅ `Validated .claude.json with 1 MCP server(s)`
 
 ## Documentation Updates
 
@@ -185,7 +185,7 @@ Key indicators of success:
 ```
 Found .claude-code-config.yml in exploded JAR (BOOT-INF/classes/)
 Copied .claude-code-config.yml to application root
-Validated .claude/mcp.json with 1 MCP server(s)
+Validated .claude.json with 1 MCP server(s)
 ```
 
 ### Application Startup

@@ -114,7 +114,22 @@ try:
     with open(config_file, 'r') as f:
         lines = f.readlines()
 except Exception as e:
-    print(json.dumps({'mcpServers': {}}))
+    # Return empty config with projects structure
+    print(json.dumps({
+        'projects': {
+            '/home/vcap/app': {
+                'allowedTools': [],
+                'mcpContextUris': [],
+                'mcpServers': {},
+                'enabledMcpjsonServers': [],
+                'disabledMcpjsonServers': [],
+                'hasTrustDialogAccepted': False,
+                'projectOnboardingSeenCount': 0,
+                'hasClaudeMdExternalIncludesApproved': False,
+                'hasClaudeMdExternalIncludesWarningShown': False
+            }
+        }
+    }))
     sys.exit(0)
 
 mcp_servers = {}
@@ -205,8 +220,23 @@ for line in lines:
 if current_server and current_server_name:
     mcp_servers[current_server_name] = current_server
 
-# Output JSON
-output = {'mcpServers': mcp_servers}
+# Output JSON in Claude Code format with projects structure
+# The app directory is /home/vcap/app in Cloud Foundry
+output = {
+    'projects': {
+        '/home/vcap/app': {
+            'allowedTools': [],
+            'mcpContextUris': [],
+            'mcpServers': mcp_servers,
+            'enabledMcpjsonServers': [],
+            'disabledMcpjsonServers': [],
+            'hasTrustDialogAccepted': False,
+            'projectOnboardingSeenCount': 0,
+            'hasClaudeMdExternalIncludesApproved': False,
+            'hasClaudeMdExternalIncludesWarningShown': False
+        }
+    }
+}
 print(json.dumps(output, indent=2))
 PYTHON_SCRIPT
 
@@ -214,7 +244,19 @@ PYTHON_SCRIPT
         # Fallback: create empty config if Python not available
         cat > "${output_file}" <<'EOF'
 {
-  "mcpServers": {}
+  "projects": {
+    "/home/vcap/app": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": false,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false
+    }
+  }
 }
 EOF
         echo "       WARNING: Python3 not available for YAML parsing, using empty config"
@@ -224,7 +266,7 @@ EOF
     # Validate generated JSON
     if [ -f "${output_file}" ]; then
         # Basic validation - check if file has proper structure
-        if grep -q '"mcpServers"' "${output_file}"; then
+        if grep -q '"projects"' "${output_file}" && grep -q '"mcpServers"' "${output_file}"; then
             echo "       Generated .claude.json with MCP server configuration"
             return 0
         fi
@@ -234,21 +276,16 @@ EOF
     return 1
 }
 
-# Generate .claude/mcp.json configuration file
-# Note: Claude Code uses .claude/mcp.json for MCP server configuration,
-# while .claude.json is used for internal CLI state
+# Generate .claude.json configuration file with MCP servers under projects section
+# Note: Claude Code uses .claude.json with a projects structure for MCP server configuration
 generate_claude_json() {
     local build_dir=$1
-    local claude_dir="${build_dir}/.claude"
-    local output_file="${claude_dir}/mcp.json"
+    local output_file="${build_dir}/.claude.json"
     
-    # Create .claude directory if it doesn't exist
-    mkdir -p "${claude_dir}"
-
     # Try to parse .claude-code-config.yml first
     if parse_claude_code_config "${build_dir}"; then
         if extract_mcp_servers "${CLAUDE_CODE_CONFIG_FILE}" "${output_file}"; then
-            echo "       Created .claude/mcp.json from .claude-code-config.yml"
+            echo "       Created .claude.json from .claude-code-config.yml"
             return 0
         fi
     fi
@@ -256,19 +293,31 @@ generate_claude_json() {
     # Try to parse manifest.yml (won't work in CF but included for completeness)
     if parse_manifest_config "${build_dir}"; then
         if extract_mcp_servers "${CLAUDE_CODE_MANIFEST_CONFIG}" "${output_file}"; then
-            echo "       Created .claude/mcp.json from manifest.yml"
+            echo "       Created .claude.json from manifest.yml"
             return 0
         fi
     fi
 
-    # No configuration found - create empty .claude/mcp.json
+    # No configuration found - create empty .claude.json with projects structure
     cat > "${output_file}" <<'EOF'
 {
-  "mcpServers": {}
+  "projects": {
+    "/home/vcap/app": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": false,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false
+    }
+  }
 }
 EOF
 
-    echo "       Created empty .claude/mcp.json (no MCP configuration found)"
+    echo "       Created empty .claude.json (no MCP configuration found)"
     return 0
 }
 
@@ -321,19 +370,19 @@ EOF
     return 0
 }
 
-# Validate MCP server configuration
+# Validate MCP server configuration in .claude.json
 validate_mcp_config() {
     local build_dir=$1
-    local config_file="${build_dir}/.claude/mcp.json"
+    local config_file="${build_dir}/.claude.json"
 
     if [ ! -f "${config_file}" ]; then
-        echo "       WARNING: .claude/mcp.json not found"
+        echo "       WARNING: .claude.json not found"
         return 1
     fi
 
     # Basic validation - check JSON structure
-    if ! grep -q '"mcpServers"' "${config_file}"; then
-        echo "       WARNING: .claude/mcp.json missing mcpServers section"
+    if ! grep -q '"projects"' "${config_file}" || ! grep -q '"mcpServers"' "${config_file}"; then
+        echo "       WARNING: .claude.json missing projects or mcpServers section"
         return 1
     fi
 
@@ -344,21 +393,21 @@ validate_mcp_config() {
     if [ "${server_count}" -eq 0 ] 2>/dev/null; then
         echo "       No MCP servers configured (using empty configuration)"
     else
-        echo "       Validated .claude/mcp.json with ${server_count} MCP server(s)"
+        echo "       Validated .claude.json with ${server_count} MCP server(s)"
     fi
 
     return 0
 }
 
-# Generate MCP server configuration (.claude/mcp.json)
+# Generate MCP server configuration (.claude.json)
 configure_mcp_servers() {
     local build_dir=$1
 
     echo "-----> Configuring MCP servers"
 
-    # Generate .claude/mcp.json
+    # Generate .claude.json
     if ! generate_claude_json "${build_dir}"; then
-        echo "       WARNING: Failed to generate .claude/mcp.json, using empty configuration"
+        echo "       WARNING: Failed to generate .claude.json, using empty configuration"
     fi
 
     # Validate configuration
