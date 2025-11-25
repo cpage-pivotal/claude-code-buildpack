@@ -4,7 +4,7 @@ applications:
   memory: 3G
   buildpacks:
     - nodejs_buildpack
-    - https://github.com/cpage-pivotal/claude-code-buildpack
+    - https://github.com/cpage-pivotal/claude-code-buildpack#mcpServers
     - java_buildpack_offline
   path: target/claude-code-demo-1.0.0.jar
   env:

@@ -71,19 +71,19 @@ else
     assert_failure "Should find existing .claude-code-config.yml"
 fi
 
-# Test 3: Generate empty .claude/mcp.json when no config exists
-print_test_header "Test 3: Generate empty .claude/mcp.json when no config exists"
+# Test 3: Generate empty .claude.json when no config exists
+print_test_header "Test 3: Generate empty .claude.json when no config exists"
 rm -f "${TEST_DIR}/.claude-code-config.yml"
-rm -f "${TEST_DIR}/.claude/mcp.json"
+rm -f "${TEST_DIR}/.claude.json"
 generate_claude_json "${TEST_DIR}"
-if [ -f "${TEST_DIR}/.claude/mcp.json" ] && grep -q '"mcpServers": {}' "${TEST_DIR}/.claude/mcp.json"; then
-    assert_success "Should create empty .claude/mcp.json when no config exists"
+if [ -f "${TEST_DIR}/.claude.json" ] && grep -q '"projects"' "${TEST_DIR}/.claude.json" && grep -q '"mcpServers": {}' "${TEST_DIR}/.claude.json"; then
+    assert_success "Should create empty .claude.json when no config exists"
 else
-    assert_failure "Should create empty .claude/mcp.json when no config exists"
+    assert_failure "Should create empty .claude.json when no config exists"
 fi
 
-# Test 4: Generate .claude/mcp.json from simple config
-print_test_header "Test 4: Generate .claude/mcp.json from simple config"
+# Test 4: Generate .claude.json from simple config
+print_test_header "Test 4: Generate .claude.json from simple config"
 cat > "${TEST_DIR}/.claude-code-config.yml" <<'EOF'
 claudeCode:
   enabled: true
@@ -98,22 +98,22 @@ claudeCode:
         ALLOWED_DIRECTORIES: "/home/vcap/app,/tmp"
 EOF
 
-rm -f "${TEST_DIR}/.claude/mcp.json"
+rm -f "${TEST_DIR}/.claude.json"
 generate_claude_json "${TEST_DIR}"
-if [ -f "${TEST_DIR}/.claude/mcp.json" ]; then
-    if grep -q '"filesystem"' "${TEST_DIR}/.claude/mcp.json" && \
-       grep -q '"type": "stdio"' "${TEST_DIR}/.claude/mcp.json" && \
-       grep -q '"command": "npx"' "${TEST_DIR}/.claude/mcp.json"; then
-        assert_success "Should generate .claude/mcp.json with filesystem server"
+if [ -f "${TEST_DIR}/.claude.json" ]; then
+    if grep -q '"filesystem"' "${TEST_DIR}/.claude.json" && \
+       grep -q '"type": "stdio"' "${TEST_DIR}/.claude.json" && \
+       grep -q '"command": "npx"' "${TEST_DIR}/.claude.json"; then
+        assert_success "Should generate .claude.json with filesystem server"
     else
-        assert_failure "Should generate .claude/mcp.json with filesystem server"
+        assert_failure "Should generate .claude.json with filesystem server"
     fi
 else
-    assert_failure "Should generate .claude/mcp.json file"
+    assert_failure "Should generate .claude.json file"
 fi
 
-# Test 5: Generate .claude/mcp.json with multiple servers
-print_test_header "Test 5: Generate .claude/mcp.json with multiple servers"
+# Test 5: Generate .claude.json with multiple servers
+print_test_header "Test 5: Generate .claude.json with multiple servers"
 cat > "${TEST_DIR}/.claude-code-config.yml" <<'EOF'
 claudeCode:
   enabled: true
@@ -136,78 +136,102 @@ claudeCode:
         GITHUB_PERSONAL_ACCESS_TOKEN: "ghp_test123"
 EOF
 
-rm -f "${TEST_DIR}/.claude/mcp.json"
+rm -f "${TEST_DIR}/.claude.json"
 generate_claude_json "${TEST_DIR}"
-if [ -f "${TEST_DIR}/.claude/mcp.json" ]; then
-    if grep -q '"filesystem"' "${TEST_DIR}/.claude/mcp.json" && \
-       grep -q '"github"' "${TEST_DIR}/.claude/mcp.json"; then
-        assert_success "Should generate .claude/mcp.json with multiple servers"
+if [ -f "${TEST_DIR}/.claude.json" ]; then
+    if grep -q '"filesystem"' "${TEST_DIR}/.claude.json" && \
+       grep -q '"github"' "${TEST_DIR}/.claude.json"; then
+        assert_success "Should generate .claude.json with multiple servers"
     else
-        assert_failure "Should generate .claude/mcp.json with multiple servers"
+        assert_failure "Should generate .claude.json with multiple servers"
     fi
 else
-    assert_failure "Should generate .claude/mcp.json file with multiple servers"
+    assert_failure "Should generate .claude.json file with multiple servers"
 fi
 
-# Test 6: Validate empty .claude/mcp.json
-print_test_header "Test 6: Validate empty .claude/mcp.json"
-cat > "${TEST_DIR}/.claude/mcp.json" <<'EOF'
+# Test 6: Validate empty .claude.json
+print_test_header "Test 6: Validate empty .claude.json"
+cat > "${TEST_DIR}/.claude.json" <<'EOF'
 {
-  "mcpServers": {}
-}
-EOF
-
-if validate_mcp_config "${TEST_DIR}" > /dev/null 2>&1; then
-    assert_success "Should validate empty .claude/mcp.json"
-else
-    assert_failure "Should validate empty .claude/mcp.json"
-fi
-
-# Test 7: Validate .claude/mcp.json with servers
-print_test_header "Test 7: Validate .claude/mcp.json with servers"
-cat > "${TEST_DIR}/.claude/mcp.json" <<'EOF'
-{
-  "mcpServers": {
-    "filesystem": {
-      "type": "stdio",
-      "command": "npx"
+  "projects": {
+    "/home/vcap/app": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": false,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false
     }
   }
 }
 EOF
 
 if validate_mcp_config "${TEST_DIR}" > /dev/null 2>&1; then
-    assert_success "Should validate .claude/mcp.json with servers"
+    assert_success "Should validate empty .claude.json"
 else
-    assert_failure "Should validate .claude/mcp.json with servers"
+    assert_failure "Should validate empty .claude.json"
 fi
 
-# Test 8: Validate missing .claude/mcp.json
-print_test_header "Test 8: Validate missing .claude/mcp.json"
-rm -f "${TEST_DIR}/.claude/mcp.json"
+# Test 7: Validate .claude.json with servers
+print_test_header "Test 7: Validate .claude.json with servers"
+cat > "${TEST_DIR}/.claude.json" <<'EOF'
+{
+  "projects": {
+    "/home/vcap/app": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {
+        "filesystem": {
+          "type": "stdio",
+          "command": "npx"
+        }
+      },
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": false,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false
+    }
+  }
+}
+EOF
+
 if validate_mcp_config "${TEST_DIR}" > /dev/null 2>&1; then
-    assert_failure "Should fail when .claude/mcp.json doesn't exist"
+    assert_success "Should validate .claude.json with servers"
 else
-    assert_success "Should fail when .claude/mcp.json doesn't exist"
+    assert_failure "Should validate .claude.json with servers"
 fi
 
-# Test 9: Validate malformed .claude/mcp.json
-print_test_header "Test 9: Validate malformed .claude/mcp.json"
-cat > "${TEST_DIR}/.claude/mcp.json" <<'EOF'
+# Test 8: Validate missing .claude.json
+print_test_header "Test 8: Validate missing .claude.json"
+rm -f "${TEST_DIR}/.claude.json"
+if validate_mcp_config "${TEST_DIR}" > /dev/null 2>&1; then
+    assert_failure "Should fail when .claude.json doesn't exist"
+else
+    assert_success "Should fail when .claude.json doesn't exist"
+fi
+
+# Test 9: Validate malformed .claude.json
+print_test_header "Test 9: Validate malformed .claude.json"
+cat > "${TEST_DIR}/.claude.json" <<'EOF'
 {
   "invalid": "structure"
 }
 EOF
 
 if validate_mcp_config "${TEST_DIR}" > /dev/null 2>&1; then
-    assert_failure "Should fail with malformed .claude/mcp.json"
+    assert_failure "Should fail with malformed .claude.json"
 else
-    assert_success "Should fail with malformed .claude/mcp.json"
+    assert_success "Should fail with malformed .claude.json"
 fi
 
 # Test 10: Full configure_mcp_servers workflow
 print_test_header "Test 10: Full configure_mcp_servers workflow"
-rm -f "${TEST_DIR}/.claude/mcp.json"
+rm -f "${TEST_DIR}/.claude.json"
 cat > "${TEST_DIR}/.claude-code-config.yml" <<'EOF'
 claudeCode:
   enabled: true
@@ -223,7 +247,7 @@ claudeCode:
 EOF
 
 if configure_mcp_servers "${TEST_DIR}" > /dev/null 2>&1; then
-    if [ -f "${TEST_DIR}/.claude/mcp.json" ] && grep -q '"postgres"' "${TEST_DIR}/.claude/mcp.json"; then
+    if [ -f "${TEST_DIR}/.claude.json" ] && grep -q '"postgres"' "${TEST_DIR}/.claude.json"; then
         assert_success "Should complete full MCP configuration workflow"
     else
         assert_failure "Should complete full MCP configuration workflow"
@@ -254,7 +278,7 @@ fi
 
 # Test 10b: configure_claude_code workflow (orchestrator)
 print_test_header "Test 10b: configure_claude_code workflow"
-rm -f "${TEST_DIR}/.claude/mcp.json"
+rm -f "${TEST_DIR}/.claude.json"
 rm -rf "${TEST_DIR}/.claude"
 cat > "${TEST_DIR}/.claude-code-config.yml" <<'EOF'
 claudeCode:
@@ -268,7 +292,7 @@ claudeCode:
 EOF
 parse_claude_code_config "${TEST_DIR}"
 if configure_claude_code "${TEST_DIR}" > /dev/null 2>&1; then
-    if [ -f "${TEST_DIR}/.claude/mcp.json" ] && [ -f "${TEST_DIR}/.claude/settings.json" ]; then
+    if [ -f "${TEST_DIR}/.claude.json" ] && [ -f "${TEST_DIR}/.claude/settings.json" ]; then
         assert_success "Should complete full Claude Code configuration (MCP + settings)"
     else
         assert_failure "Should complete full Claude Code configuration (MCP + settings)"
@@ -304,8 +328,8 @@ claudeCode:
   version: "2.0.50"
 EOF
 
-rm -f "${TEST_DIR}/.claude/mcp.json"
-OUTPUT_FILE="${TEST_DIR}/.claude/mcp.json"
+rm -f "${TEST_DIR}/.claude.json"
+OUTPUT_FILE="${TEST_DIR}/.claude.json"
 if extract_mcp_servers "${TEST_DIR}/.claude-code-config.yml" "${OUTPUT_FILE}"; then
     assert_failure "Should fail when no mcpServers section exists"
 else
@@ -325,15 +349,15 @@ claudeCode:
         API_TOKEN: "test-token-123"
 EOF
 
-rm -f "${TEST_DIR}/.claude/mcp.json"
+rm -f "${TEST_DIR}/.claude.json"
 generate_claude_json "${TEST_DIR}"
-if [ -f "${TEST_DIR}/.claude/mcp.json" ] && \
-   grep -q '"remote-sse-server"' "${TEST_DIR}/.claude/mcp.json" && \
-   grep -q '"type": "sse"' "${TEST_DIR}/.claude/mcp.json" && \
-   grep -q '"url": "https://mcp.example.com/api/sse"' "${TEST_DIR}/.claude/mcp.json"; then
-    assert_success "Should generate .claude/mcp.json with SSE remote server"
+if [ -f "${TEST_DIR}/.claude.json" ] && \
+   grep -q '"remote-sse-server"' "${TEST_DIR}/.claude.json" && \
+   grep -q '"type": "sse"' "${TEST_DIR}/.claude.json" && \
+   grep -q '"url": "https://mcp.example.com/api/sse"' "${TEST_DIR}/.claude.json"; then
+    assert_success "Should generate .claude.json with SSE remote server"
 else
-    assert_failure "Should generate .claude/mcp.json with SSE remote server"
+    assert_failure "Should generate .claude.json with SSE remote server"
 fi
 
 # Test 14: Remote MCP server with HTTP transport
@@ -349,15 +373,15 @@ claudeCode:
         GATEWAY_TOKEN: "Bearer xyz789"
 EOF
 
-rm -f "${TEST_DIR}/.claude/mcp.json"
+rm -f "${TEST_DIR}/.claude.json"
 generate_claude_json "${TEST_DIR}"
-if [ -f "${TEST_DIR}/.claude/mcp.json" ] && \
-   grep -q '"remote-http-server"' "${TEST_DIR}/.claude/mcp.json" && \
-   grep -q '"type": "http"' "${TEST_DIR}/.claude/mcp.json" && \
-   grep -q '"url": "https://api.example.com/mcp/endpoint"' "${TEST_DIR}/.claude/mcp.json"; then
-    assert_success "Should generate .claude/mcp.json with HTTP remote server"
+if [ -f "${TEST_DIR}/.claude.json" ] && \
+   grep -q '"remote-http-server"' "${TEST_DIR}/.claude.json" && \
+   grep -q '"type": "http"' "${TEST_DIR}/.claude.json" && \
+   grep -q '"url": "https://api.example.com/mcp/endpoint"' "${TEST_DIR}/.claude.json"; then
+    assert_success "Should generate .claude.json with HTTP remote server"
 else
-    assert_failure "Should generate .claude/mcp.json with HTTP remote server"
+    assert_failure "Should generate .claude.json with HTTP remote server"
 fi
 
 # Test 15: Parse logLevel from config file
@@ -454,18 +478,18 @@ claudeCode:
         LLM_TOKEN: "xyz789"
 EOF
 
-rm -f "${TEST_DIR}/.claude/mcp.json"
+rm -f "${TEST_DIR}/.claude.json"
 generate_claude_json "${TEST_DIR}"
-if [ -f "${TEST_DIR}/.claude/mcp.json" ] && \
-   grep -q '"filesystem"' "${TEST_DIR}/.claude/mcp.json" && \
-   grep -q '"remote-data"' "${TEST_DIR}/.claude/mcp.json" && \
-   grep -q '"llm-gateway"' "${TEST_DIR}/.claude/mcp.json" && \
-   grep -q '"type": "stdio"' "${TEST_DIR}/.claude/mcp.json" && \
-   grep -q '"type": "sse"' "${TEST_DIR}/.claude/mcp.json" && \
-   grep -q '"type": "http"' "${TEST_DIR}/.claude/mcp.json"; then
-    assert_success "Should generate .claude/mcp.json with mixed local and remote servers"
+if [ -f "${TEST_DIR}/.claude.json" ] && \
+   grep -q '"filesystem"' "${TEST_DIR}/.claude.json" && \
+   grep -q '"remote-data"' "${TEST_DIR}/.claude.json" && \
+   grep -q '"llm-gateway"' "${TEST_DIR}/.claude.json" && \
+   grep -q '"type": "stdio"' "${TEST_DIR}/.claude.json" && \
+   grep -q '"type": "sse"' "${TEST_DIR}/.claude.json" && \
+   grep -q '"type": "http"' "${TEST_DIR}/.claude.json"; then
+    assert_success "Should generate .claude.json with mixed local and remote servers"
 else
-    assert_failure "Should generate .claude/mcp.json with mixed local and remote servers"
+    assert_failure "Should generate .claude.json with mixed local and remote servers"
 fi
 
 # Test 20: Generate settings.json with default configuration
