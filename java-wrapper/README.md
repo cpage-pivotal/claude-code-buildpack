@@ -281,8 +281,22 @@ try {
 ### Application Setup
 
 1. Add the library to your `pom.xml` or `build.gradle`
-2. Create a `.claude-code-config.yml` in your application root
+2. Create a `.claude-code-config.yml` configuration file
 3. Set `ANTHROPIC_API_KEY` in your manifest
+
+### Configuration File Location
+
+For Spring Boot applications, you have two options for including `.claude-code-config.yml`:
+
+**Option 1 (Recommended):** Place in `src/main/resources/`
+- Spring Boot automatically packages it in the JAR at `BOOT-INF/classes/.claude-code-config.yml`
+- The buildpack finds it automatically when the Java buildpack explodes the JAR
+- No additional Maven/Gradle configuration needed
+
+**Option 2:** Add to JAR root using a Maven plugin
+- Requires `maven-antrun-plugin` configuration
+- Places the file at the JAR root
+- Use if you have specific requirements for the file location
 
 ### manifest.yml Example
 
@@ -299,11 +313,18 @@ applications:
 
 ### .claude-code-config.yml Example
 
+**Recommended approach for Spring Boot:**
+
+Place this file in `src/main/resources/.claude-code-config.yml`:
+
 ```yaml
 claudeCode:
   enabled: true
   logLevel: info
   model: sonnet
+  
+  settings:
+    alwaysThinkingEnabled: true
   
   mcpServers:
     - name: filesystem
@@ -315,6 +336,8 @@ claudeCode:
       env:
         ALLOWED_DIRECTORIES: "/home/vcap/app,/tmp"
 ```
+
+Spring Boot will automatically package this in your JAR, and the buildpack will find it during deployment.
 
 ## Best Practices
 

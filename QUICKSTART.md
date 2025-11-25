@@ -32,9 +32,35 @@ applications:
 
 **Important**: The buildpack order matters! Node.js must come first, then Claude Code, then Java.
 
-## Step 3: Configure Maven for JAR Deployment
+## Step 3: Add Configuration File
 
-For Spring Boot applications, you must embed the config file in your JAR. Add this plugin to your `pom.xml`:
+Create a `.claude-code-config.yml` file for your Spring Boot application. You have two options:
+
+### Option 1: Use Spring Boot Resources (Recommended)
+
+Place the config file in your resources directory:
+
+```bash
+# Create config in src/main/resources/
+cat > src/main/resources/.claude-code-config.yml <<EOF
+claudeCode:
+  enabled: true
+  version: "latest"
+  logLevel: info
+  model: sonnet
+  
+  settings:
+    alwaysThinkingEnabled: true
+  
+  mcpServers: []
+EOF
+```
+
+Spring Boot will automatically include this in your JAR at `BOOT-INF/classes/.claude-code-config.yml`, and the buildpack will find it.
+
+### Option 2: Add to JAR Root (Alternative)
+
+If you need the config at the JAR root, add this plugin to your `pom.xml`:
 
 ```xml
 <build>
@@ -72,16 +98,34 @@ For Spring Boot applications, you must embed the config file in your JAR. Add th
 
 ## Step 4: Build and Verify
 
-Build your application and verify the config file is properly embedded:
+Build your application:
 
 ```bash
 mvn clean package
+```
 
-# Verify config is at JAR root (not in BOOT-INF/classes/)
+### Option 1 Verification (Resources Directory)
+
+If you used Option 1, verify the config is in BOOT-INF/classes/:
+
+```bash
+unzip -l target/my-app.jar | grep claude-code-config
+```
+
+You should see:
+```
+203  11-25-2025 08:45   BOOT-INF/classes/.claude-code-config.yml
+```
+
+### Option 2 Verification (JAR Root)
+
+If you used Option 2 with the Maven plugin, verify the config is at JAR root:
+
+```bash
 jar tf target/my-app.jar | head -20
 ```
 
-You should see `.claude-code-config.yml` listed at the root of the JAR, **not** inside `BOOT-INF/classes/`.
+You should see `.claude-code-config.yml` listed at the root of the JAR.
 
 ## Step 5: Deploy
 
