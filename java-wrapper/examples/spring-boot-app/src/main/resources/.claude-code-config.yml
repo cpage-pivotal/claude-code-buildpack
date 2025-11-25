@@ -4,6 +4,9 @@ claudeCode:
   logLevel: info
   model: sonnet
   
+  settings:
+    alwaysThinkingEnabled: true
+  
   mcpServers:
     - name: github
       type: sse

@@ -122,16 +122,14 @@ The buildpack should detect when:
 - 1: Skip this buildpack
 
 **Spring Boot JAR Support:**
-For Spring Boot applications, the `.claude-code-config.yml` file can be packaged inside the JAR. The buildpack supports two locations:
-
-1. **BOOT-INF/classes/** (Recommended): Place the config file in `src/main/resources/` and Spring Boot will automatically include it in the JAR at `BOOT-INF/classes/.claude-code-config.yml`
-2. **JAR root**: Use a Maven/Gradle plugin to add the config file to the JAR root after packaging
+For Spring Boot applications, place the `.claude-code-config.yml` file in `src/main/resources/`. Spring Boot will automatically package it in the JAR at `BOOT-INF/classes/.claude-code-config.yml`.
 
 The buildpack will:
 1. Check for the config file in BUILD_DIR first (if deployed as expanded directory)
 2. Check for exploded JAR at `BUILD_DIR/BOOT-INF/classes/.claude-code-config.yml` (Java buildpack explodes JARs during staging)
-3. Fall back to extracting from actual JAR files if found
-4. Use the extracted/found config for MCP and settings generation
+3. Use the found config for MCP and settings generation
+
+**Note:** The buildpack also supports extracting from actual JAR files as a fallback, checking both the JAR root and BOOT-INF/classes/ locations.
 
 **Output:**
 - Buildpack name and version to stdout

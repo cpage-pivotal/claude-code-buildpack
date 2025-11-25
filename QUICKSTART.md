@@ -34,14 +34,11 @@ applications:
 
 ## Step 3: Add Configuration File
 
-Create a `.claude-code-config.yml` file for your Spring Boot application. You have two options:
-
-### Option 1: Use Spring Boot Resources (Recommended)
-
-Place the config file in your resources directory:
+Create a `.claude-code-config.yml` file in your Spring Boot resources directory:
 
 ```bash
 # Create config in src/main/resources/
+mkdir -p src/main/resources
 cat > src/main/resources/.claude-code-config.yml <<EOF
 claudeCode:
   enabled: true
@@ -56,45 +53,7 @@ claudeCode:
 EOF
 ```
 
-Spring Boot will automatically include this in your JAR at `BOOT-INF/classes/.claude-code-config.yml`, and the buildpack will find it.
-
-### Option 2: Add to JAR Root (Alternative)
-
-If you need the config at the JAR root, add this plugin to your `pom.xml`:
-
-```xml
-<build>
-    <plugins>
-        <plugin>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-maven-plugin</artifactId>
-        </plugin>
-
-        <!-- Add config file to JAR root after Spring Boot repackaging -->
-        <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-antrun-plugin</artifactId>
-            <version>3.1.0</version>
-            <executions>
-                <execution>
-                    <id>add-config-to-jar</id>
-                    <phase>package</phase>
-                    <goals>
-                        <goal>run</goal>
-                    </goals>
-                    <configuration>
-                        <target>
-                            <jar destfile="${project.build.directory}/${project.build.finalName}.jar" update="true">
-                                <fileset dir="${project.basedir}" includes=".claude-code-config.yml"/>
-                            </jar>
-                        </target>
-                    </configuration>
-                </execution>
-            </executions>
-        </plugin>
-    </plugins>
-</build>
-```
+Spring Boot will automatically include this in your JAR at `BOOT-INF/classes/.claude-code-config.yml`, and the buildpack will find it during Cloud Foundry deployment.
 
 ## Step 4: Build and Verify
 
@@ -104,9 +63,7 @@ Build your application:
 mvn clean package
 ```
 
-### Option 1 Verification (Resources Directory)
-
-If you used Option 1, verify the config is in BOOT-INF/classes/:
+Verify the config file is included in your JAR:
 
 ```bash
 unzip -l target/my-app.jar | grep claude-code-config
@@ -116,16 +73,6 @@ You should see:
 ```
 203  11-25-2025 08:45   BOOT-INF/classes/.claude-code-config.yml
 ```
-
-### Option 2 Verification (JAR Root)
-
-If you used Option 2 with the Maven plugin, verify the config is at JAR root:
-
-```bash
-jar tf target/my-app.jar | head -20
-```
-
-You should see `.claude-code-config.yml` listed at the root of the JAR.
 
 ## Step 5: Deploy
 

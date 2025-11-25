@@ -286,17 +286,11 @@ try {
 
 ### Configuration File Location
 
-For Spring Boot applications, you have two options for including `.claude-code-config.yml`:
+For Spring Boot applications, place `.claude-code-config.yml` in `src/main/resources/`:
 
-**Option 1 (Recommended):** Place in `src/main/resources/`
 - Spring Boot automatically packages it in the JAR at `BOOT-INF/classes/.claude-code-config.yml`
-- The buildpack finds it automatically when the Java buildpack explodes the JAR
-- No additional Maven/Gradle configuration needed
-
-**Option 2:** Add to JAR root using a Maven plugin
-- Requires `maven-antrun-plugin` configuration
-- Places the file at the JAR root
-- Use if you have specific requirements for the file location
+- The buildpack finds it automatically when the Java buildpack explodes the JAR during deployment
+- No additional Maven/Gradle configuration needed - just standard Spring Boot resource handling
 
 ### manifest.yml Example
 
@@ -312,8 +306,6 @@ applications:
 ```
 
 ### .claude-code-config.yml Example
-
-**Recommended approach for Spring Boot:**
 
 Place this file in `src/main/resources/.claude-code-config.yml`:
 

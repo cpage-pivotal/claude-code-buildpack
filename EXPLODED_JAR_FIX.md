@@ -82,9 +82,9 @@ fi
    - Supports both JAR root and BOOT-INF/classes/ locations within the JAR
    - Handles edge cases where buildpack ordering might differ
 
-## Configuration File Locations
+## Configuration File Location
 
-### Recommended: src/main/resources/ (Simplest)
+### Recommended Approach: src/main/resources/
 
 **Location:** `src/main/resources/.claude-code-config.yml`
 
@@ -106,45 +106,7 @@ fi
 </build>
 ```
 
-That's it! No additional configuration needed.
-
-### Alternative: JAR Root (More Complex)
-
-**Location:** JAR root (requires plugin)
-
-**Advantages:**
-- ✅ Config file at JAR root (visible with `jar tf`)
-- ✅ Matches some existing project structures
-
-**Disadvantages:**
-- ❌ Requires maven-antrun-plugin configuration
-- ❌ More complex build setup
-- ❌ Additional maintenance
-
-**Maven setup:**
-```xml
-<plugin>
-    <groupId>org.apache.maven.plugins</groupId>
-    <artifactId>maven-antrun-plugin</artifactId>
-    <version>3.1.0</version>
-    <executions>
-        <execution>
-            <id>add-config-to-jar</id>
-            <phase>package</phase>
-            <goals>
-                <goal>run</goal>
-            </goals>
-            <configuration>
-                <target>
-                    <jar destfile="${project.build.directory}/${project.build.finalName}.jar" update="true">
-                        <fileset dir="${project.basedir}" includes=".claude-code-config.yml"/>
-                    </jar>
-                </target>
-            </configuration>
-        </execution>
-    </executions>
-</plugin>
-```
+That's it! No additional configuration needed. Just place your `.claude-code-config.yml` in `src/main/resources/` and Spring Boot handles the rest.
 
 ## Verification
 
