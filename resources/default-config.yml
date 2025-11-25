@@ -53,3 +53,21 @@ claudeCode:
   #     - "@modelcontextprotocol/server-postgres"
   #   env:
   #     POSTGRES_CONNECTION_STRING: ${DATABASE_URL}
+
+  # Skills Configuration
+  # Skills extend Claude's capabilities with custom instructions and scripts
+  skills: []
+
+  # Example Skills (uncomment to enable):
+  #
+  # Bundled Skills (already in .claude/skills/):
+  # - Place Skills in .claude/skills/ directory in your application
+  # - No configuration needed - automatically discovered
+  #
+  # Git-based Skills (cloned during staging):
+  # - name: team-workflow-skills
+  #   git:
+  #     url: https://github.com/your-org/team-skills.git
+  #     ref: main              # Optional: branch, tag, or commit
+  #     path: skills/          # Optional: subdirectory within repo
+

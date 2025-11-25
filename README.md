@@ -11,6 +11,7 @@ This buildpack installs the Claude Code CLI and Node.js runtime into your Cloud 
 - 🚀 Automated installation of Node.js and Claude Code CLI
 - 🔐 Secure API key management via environment variables
 - 🔌 MCP (Model Context Protocol) server support ✅
+- 🎯 Skills configuration (bundled and git-based) ✅
 - ☕ Java wrapper library for easy integration (Phase 3)
 - 📡 Real-time streaming output support
 - 💾 Intelligent caching for faster builds
@@ -494,6 +495,202 @@ See the `examples/` directory for complete configuration examples:
 - `examples/.claude-code-config.yml` - Full featured example with local (stdio) MCP servers
 - `examples/.claude-code-config-remote-mcp.yml` - Remote MCP servers with SSE and HTTP transports
 - `examples/.claude-code-config-minimal.yml` - Minimal configuration without MCP servers
+
+## Skills Configuration
+
+Claude Skills extend Claude's capabilities with custom instructions, scripts, and templates. Skills are modular folders containing a `SKILL.md` file with instructions that Claude reads when relevant.
+
+### What are Skills?
+
+Skills are **model-invoked**—Claude autonomously decides when to use them based on your request and the Skill's description. Each Skill consists of:
+
+- **SKILL.md** (required): Markdown file with YAML frontmatter containing instructions
+- **Supporting files** (optional): Scripts, templates, documentation, etc.
+
+Learn more: [Claude Skills Documentation](https://code.claude.com/docs/en/skills)
+
+### Bundled Skills
+
+Bundle Skills directly in your application by placing them in `.claude/skills/`:
+
+```
+my-app/
+├── .claude/
+│   └── skills/
+│       ├── commit-helper/
+│       │   └── SKILL.md
+│       └── code-reviewer/
+│           ├── SKILL.md
+│           └── scripts/
+│               └── analyze.py
+├── .claude-code-config.yml
+└── ... (other files)
+```
+
+**SKILL.md format**:
+
+```markdown
+---
+name: commit-helper
+description: Generates clear commit messages from git diffs. Use when writing commit messages or reviewing staged changes.
+---
+
+# Generating Commit Messages
+
+## Instructions
+
+1. Run `git diff --staged` to see changes
+2. I'll suggest a commit message with:
+   - Summary under 50 characters
+   - Detailed description
+   - Affected components
+
+## Best practices
+
+- Use present tense
+- Explain what and why, not how
+```
+
+Bundled Skills are automatically discovered during staging—no configuration needed.
+
+### Git-Based Skills
+
+Skills can also be cloned from git repositories during staging. Add them to your `.claude-code-config.yml`:
+
+```yaml
+claudeCode:
+  enabled: true
+  
+  skills:
+    # Clone from git repository
+    - name: team-workflow-skills
+      git:
+        url: https://github.com/your-org/team-skills.git
+        ref: main              # Optional: branch, tag, or commit
+        path: skills/          # Optional: subdirectory within repo
+        
+    # Pin to specific version
+    - name: security-review
+      git:
+        url: https://github.com/security-team/claude-skills.git
+        ref: v1.2.0            # Recommended: use tags for stability
+```
+
+**Git configuration options**:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Unique name for the Skill (used as directory name) |
+| `url` | Yes | HTTPS git repository URL (**https:// only**) |
+| `ref` | No | Branch, tag, or commit SHA (default: default branch) |
+| `path` | No | Subdirectory within repository containing SKILL.md |
+
+**Security restrictions**:
+- Only `https://` URLs are allowed (no `git://`, `file://`, or `http://`)
+- Clone timeout: 60 seconds maximum
+- Repository size: 50MB maximum per Skill
+- Git-based Skills are cached between builds for faster deployments
+
+### Mixed Configuration
+
+You can use both bundled and git-based Skills together:
+
+```yaml
+claudeCode:
+  enabled: true
+  
+  skills:
+    # Git-based Skills
+    - name: team-workflow-skills
+      git:
+        url: https://github.com/your-org/team-skills.git
+        ref: v2.1.0
+    
+    # Bundled Skills in .claude/skills/ are automatically discovered
+```
+
+### Skill Validation
+
+During staging, the buildpack validates all Skills:
+
+```
+-----> Configuring Claude Skills
+       Found 1 bundled Skill(s)
+       Installing 2 git-based Skill(s)...
+       Cloning Skill from git: team-workflow-skills
+       URL: https://github.com/your-org/team-skills.git
+       Ref: v2.1.0
+       Installed Skill: team-workflow-skills
+       Validating Skills...
+       Valid Skills: 3
+       Installed Skills:
+       - commit-helper
+       - team-workflow-skills
+       - security-review
+       Total Skills: 3
+```
+
+Invalid Skills generate warnings but don't fail the build.
+
+### SKILL.md Requirements
+
+Every Skill must have a `SKILL.md` file with valid YAML frontmatter:
+
+```yaml
+---
+name: your-skill-name          # Required: lowercase letters, numbers, hyphens only (max 64 chars)
+description: Brief description # Required: what it does and when to use it (max 1024 chars)
+---
+
+# Skill content in Markdown
+```
+
+The `description` field is critical—it helps Claude discover when to use your Skill. Include specific triggers and use cases.
+
+**Good description**:
+```yaml
+description: Analyze Excel spreadsheets, create pivot tables, and generate charts. Use when working with Excel files, spreadsheets, or analyzing tabular data in .xlsx format.
+```
+
+**Bad description** (too vague):
+```yaml
+description: Helps with data
+```
+
+### Skills Directory Structure
+
+Skills are stored in `.claude/skills/` at runtime:
+
+```
+/home/vcap/app/
+├── .claude/
+│   ├── skills/               # Project Skills directory
+│   │   ├── bundled-skill/    # Application-bundled
+│   │   │   └── SKILL.md
+│   │   ├── team-workflow/    # Git-cloned
+│   │   │   ├── SKILL.md
+│   │   │   ├── reference.md
+│   │   │   └── scripts/
+│   │   └── security-review/  # Git-cloned
+│   │       └── SKILL.md
+│   ├── settings.json
+│   └── .claude.json
+```
+
+### Caching
+
+Git-based Skills are cached between builds:
+
+- **Cache key**: Hash of `${skill_name}::${git_url}::${ref}`
+- **Invalidation**: When URL, ref, or name changes
+- **Clear cache**: `cf delete-buildpack-cache my-app`
+
+### Additional Resources
+
+For comprehensive Skills documentation, see:
+- **[SKILLS.md](SKILLS.md)** - Complete Skills configuration guide
+- [Claude Skills Documentation](https://code.claude.com/docs/en/skills)
+- [Agent Skills Best Practices](https://docs.claude.com/en/docs/agents-and-tools/agent-skills/best-practices)
 
 ## Development
 

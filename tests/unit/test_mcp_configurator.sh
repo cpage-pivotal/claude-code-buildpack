@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# tests/unit/test_mcp_configurator.sh: Unit tests for lib/mcp_configurator.sh
+# tests/unit/test_mcp_configurator.sh: Unit tests for lib/claude_configurator.sh (MCP configuration)
 
 set -e
 
 # Test framework setup
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BP_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-MCP_LIB="${BP_DIR}/lib/mcp_configurator.sh"
+MCP_LIB="${BP_DIR}/lib/claude_configurator.sh"
 
 # Colors for output
 RED='\033[0;31m'

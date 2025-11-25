@@ -79,7 +79,7 @@ config:
   config_home: /home/vcap/app
 EOF
 
-    # Note: .claude.json is now created by the MCP configurator (lib/mcp_configurator.sh)
+    # Note: .claude.json is now created by the Claude configurator (lib/claude_configurator.sh)
     # See configure_mcp_servers() function for MCP server configuration
 }
 
