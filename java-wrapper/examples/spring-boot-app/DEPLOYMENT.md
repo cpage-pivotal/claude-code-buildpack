@@ -22,7 +22,7 @@ This copy gets packaged into the JAR file at `BOOT-INF/classes/.claude-code-conf
 
 ## Maven Configuration
 
-Add the following to your `pom.xml` to ensure YAML files are properly handled:
+Add the following to your `pom.xml` to ensure YAML and Markdown files are properly packaged:
 
 ```xml
 <build>
@@ -32,7 +32,7 @@ Add the following to your `pom.xml` to ensure YAML files are properly handled:
             <artifactId>spring-boot-maven-plugin</artifactId>
         </plugin>
         
-        <!-- Ensure .claude-code-config.yml is included in the JAR -->
+        <!-- Ensure resource files are not filtered/corrupted -->
         <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-resources-plugin</artifactId>
@@ -40,12 +40,40 @@ Add the following to your `pom.xml` to ensure YAML files are properly handled:
                 <nonFilteredFileExtensions>
                     <nonFilteredFileExtension>yml</nonFilteredFileExtension>
                     <nonFilteredFileExtension>yaml</nonFilteredFileExtension>
+                    <nonFilteredFileExtension>md</nonFilteredFileExtension>
                 </nonFilteredFileExtensions>
             </configuration>
         </plugin>
     </plugins>
 </build>
 ```
+
+## Bundled Skills
+
+To include Skills with your application, place them in `src/main/resources/.claude/skills/`:
+
+```
+my-app/
+├── src/
+│   └── main/
+│       └── resources/
+│           ├── .claude/
+│           │   └── skills/
+│           │       ├── my-skill/
+│           │       │   └── SKILL.md
+│           │       └── another-skill/
+│           │           ├── SKILL.md
+│           │           └── scripts/
+│           │               └── helper.py
+│           ├── .claude-code-config.yml
+│           └── application.yml
+├── pom.xml
+└── .claude-code-config.yml  (copy for buildpack detection)
+```
+
+Spring Boot will automatically package `src/main/resources/.claude/` into `BOOT-INF/classes/.claude/` in the JAR, and the buildpack will extract it to `/home/vcap/app/.claude/` during staging.
+
+**No Maven plugins needed!** This follows standard Spring Boot resource conventions.
 
 ## Deployment Checklist
 
@@ -56,6 +84,7 @@ Add the following to your `pom.xml` to ensure YAML files are properly handled:
   - [ ] `.claude-code-config.yml` exists in `src/main/resources/`
   - [ ] Both files have identical content
   - [ ] MCP server configurations are correct
+  - [ ] Bundled Skills (if any) are in `.claude/skills/` directory
 
 - [ ] **Build Verification**
   ```bash
@@ -65,6 +94,10 @@ Add the following to your `pom.xml` to ensure YAML files are properly handled:
   # Verify config is in JAR
   jar tf target/your-app.jar | grep claude-code-config
   # Should output: BOOT-INF/classes/.claude-code-config.yml
+  
+  # Verify Skills are in JAR (if bundled)
+  jar tf target/your-app.jar | grep "BOOT-INF/classes/.claude/"
+  # Should output: BOOT-INF/classes/.claude/skills/my-skill/SKILL.md (etc.)
   ```
 
 - [ ] **Environment Variables**

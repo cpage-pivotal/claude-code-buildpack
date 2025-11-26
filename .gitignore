@@ -45,3 +45,4 @@ logs/
 dependency-cache/
 java-wrapper/examples/spring-boot-app/vars.yaml
 /claude-code-buildpack.iml
+/plans/

@@ -21,7 +21,7 @@ DEPS_INDEX_DIR="${DEPS_DIR}/${INDEX}"
 source "${BP_DIR}/lib/environment.sh"
 source "${BP_DIR}/lib/installer.sh"
 source "${BP_DIR}/lib/validator.sh"
-source "${BP_DIR}/lib/mcp_configurator.sh"
+source "${BP_DIR}/lib/claude_configurator.sh"
 
 # Create necessary directories
 mkdir -p "${DEPS_INDEX_DIR}/bin"
@@ -85,8 +85,41 @@ if [ ! -f "${BUILD_DIR}/.claude-code-config.yml" ]; then
     fi
 fi
 
+# Extract .claude directory (Skills) from JAR if it's a Spring Boot application
+if [ ! -d "${BUILD_DIR}/.claude" ]; then
+    echo "       Checking for .claude directory in JAR..."
+    
+    # Check if this is an exploded Spring Boot JAR (Java buildpack explodes JARs)
+    if [ -d "${BUILD_DIR}/BOOT-INF/classes/.claude" ]; then
+        echo "       Found .claude directory in exploded JAR (BOOT-INF/classes/)"
+        cp -r "${BUILD_DIR}/BOOT-INF/classes/.claude" "${BUILD_DIR}/.claude"
+        echo "       Copied .claude directory with bundled Skills to application root"
+    else
+        # Fall back to looking for actual JAR files (in case Java buildpack runs after us)
+        for jar_file in "${BUILD_DIR}"/*.jar; do
+            if [ -f "${jar_file}" ]; then
+                # Check if JAR contains .claude directory in BOOT-INF/classes/
+                if unzip -l "${jar_file}" | grep -q "BOOT-INF/classes/.claude/"; then
+                    echo "       Extracting .claude directory from JAR: $(basename ${jar_file})"
+                    # Extract .claude directory from BOOT-INF/classes/ to BUILD_DIR
+                    unzip -q -o "${jar_file}" 'BOOT-INF/classes/.claude/*' -d "${BUILD_DIR}" 2>/dev/null || true
+                    if [ -d "${BUILD_DIR}/BOOT-INF/classes/.claude" ]; then
+                        cp -r "${BUILD_DIR}/BOOT-INF/classes/.claude" "${BUILD_DIR}/.claude"
+                        rm -rf "${BUILD_DIR}/BOOT-INF"  # Clean up temporary extraction
+                        echo "       Extracted .claude directory with bundled Skills"
+                        break
+                    fi
+                fi
+            fi
+        done
+    fi
+fi
+
 # Configure Claude Code (MCP servers and settings)
 configure_claude_code "${BUILD_DIR}"
+
+# Configure Claude Skills
+configure_skills "${BUILD_DIR}" "${CACHE_DIR}"
 
 # Verify installation
 echo "       Verifying installation..."

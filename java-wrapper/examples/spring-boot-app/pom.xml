@@ -68,6 +68,7 @@
                     <nonFilteredFileExtensions>
                         <nonFilteredFileExtension>yml</nonFilteredFileExtension>
                         <nonFilteredFileExtension>yaml</nonFilteredFileExtension>
+                        <nonFilteredFileExtension>md</nonFilteredFileExtension>
                     </nonFilteredFileExtensions>
                 </configuration>
             </plugin>

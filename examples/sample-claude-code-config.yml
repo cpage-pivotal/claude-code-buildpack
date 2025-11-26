@@ -54,3 +54,38 @@ claudeCode:
   #     type: sse
   #     url: "https://github-mcp-server.example.com/sse"
 
+  # Skills Configuration
+  # Skills extend Claude's capabilities with custom instructions and scripts
+  skills: []
+
+  # Example Skills configurations:
+  #
+  # Skills bundled with your application:
+  # - Place Skills in .claude/skills/ directory in your application
+  # - Each Skill should be in its own subdirectory with a SKILL.md file
+  # - No configuration needed - Skills are automatically discovered
+  #
+  # Example bundled Skill structure:
+  # .claude/
+  #   skills/
+  #     my-skill/
+  #       SKILL.md         # Required: Skill definition with YAML frontmatter
+  #       scripts/         # Optional: Supporting scripts
+  #       templates/       # Optional: Templates
+  #
+  # Skills from git repositories (cloned during staging):
+  # skills:
+  #   - name: team-workflow-skills
+  #     git:
+  #       url: https://github.com/your-org/team-skills.git
+  #       ref: main              # Optional: branch, tag, or commit (default: default branch)
+  #       path: skills/          # Optional: subdirectory within repo
+  #
+  #   - name: security-review
+  #     git:
+  #       url: https://github.com/security-team/claude-skills.git
+  #       ref: v1.2.0            # Pin to specific version tag
+  #
+  # Skills are cached between builds for faster deployments
+  # Invalid Skills generate warnings but don't fail the build
+

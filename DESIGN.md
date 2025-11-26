@@ -6,13 +6,14 @@ This document outlines the design and implementation plan for a Cloud Foundry bu
 
 ## Implementation Status
 
-**Current Phase:** Phase 3 ✅ COMPLETE
+**Current Phase:** Phase 3 ✅ COMPLETE + Skills Support ✅ COMPLETE
 
 | Phase | Status | Description |
 |-------|--------|-------------|
 | Phase 1: Core Buildpack | ✅ **Complete** | Detection, Node.js/CLI installation, environment setup, unit tests |
 | Phase 2: Configuration | ✅ **Complete** | MCP server configuration, `.claude.json` generation, YAML settings |
 | Phase 3: Java Integration | ✅ **Complete** | Java wrapper library, **true streaming**, Spring Boot integration, REST API, examples |
+| **Skills Support** | ✅ **Complete** | **Bundled & git-based Skills, YAML configuration, validation, caching** |
 | Phase 4: Production | ⏸ Planned | Security hardening, performance optimization, testing |
 | Phase 5: Release | ⏸ Planned | Final documentation, packaging, distribution |
 
@@ -29,6 +30,18 @@ This document outlines the design and implementation plan for a Cloud Foundry bu
 
 **Branch:** `streaming`
 **See:** [STREAMING_IMPLEMENTATION.md](java-wrapper/STREAMING_IMPLEMENTATION.md) for detailed streaming implementation notes
+
+**Skills Support Deliverables (November 2025):**
+- ✅ Bundled Skills support (auto-discovery from `.claude/skills/`)
+- ✅ Git-based Skills with HTTPS cloning and caching
+- ✅ YAML configuration parsing with Python
+- ✅ SKILL.md validation (frontmatter, name, description)
+- ✅ Security restrictions (HTTPS only, timeouts, size limits)
+- ✅ 20 comprehensive unit tests (100% pass rate)
+- ✅ Complete documentation (SKILLS.md, README updates)
+- ✅ Renamed `mcp_configurator.sh` to `claude_configurator.sh`
+
+**See:** [SKILLS.md](SKILLS.md) and [SKILLS_IMPLEMENTATION_SUMMARY.md](SKILLS_IMPLEMENTATION_SUMMARY.md) for complete Skills documentation
 
 **Phase 2 Deliverables:**
 - ✅ YAML configuration parsing (.claude-code-config.yml)
@@ -52,8 +65,9 @@ This document outlines the design and implementation plan for a Cloud Foundry bu
 1. Bundle Claude Code CLI into Cloud Foundry containers during staging
 2. Configure Anthropic API authentication via application manifest
 3. Support MCP (Model Context Protocol) server configuration
-4. Enable Java applications to invoke and stream CLI output
-5. Maintain compatibility with existing Cloud Foundry Java buildpacks
+4. **Support Claude Skills (bundled and git-based)** ✅
+5. Enable Java applications to invoke and stream CLI output
+6. Maintain compatibility with existing Cloud Foundry Java buildpacks
 
 ### Non-Goals
 - Replace the standard Java buildpack (this will be a supply buildpack)
@@ -100,9 +114,9 @@ claude-code-buildpack/
 │   ├── supply              # Installation script
 │   └── finalize            # (Optional) Configuration finalization
 ├── lib/
-│   ├── installer.sh        # Claude Code installation logic
-│   ├── mcp_configurator.sh # MCP server configuration
-│   └── validator.sh        # Validation utilities
+│   ├── installer.sh           # Claude Code installation logic
+│   ├── claude_configurator.sh # MCP servers, Skills, and settings configuration
+│   └── validator.sh           # Validation utilities
 ├── config/
 │   └── buildpack.yml       # Buildpack configuration
 ├── manifest.yml            # Dependency manifest
@@ -157,7 +171,14 @@ The buildpack will:
    - Generate `.claude.json` configuration file
    - Place in `/home/vcap/app/.claude.json`
 
-5. **Create Configuration Files**
+5. **Configure Claude Skills**
+   - Preserve bundled Skills from `.claude/skills/` directory
+   - Clone git-based Skills from repositories (HTTPS only)
+   - Validate SKILL.md structure and frontmatter
+   - Cache git Skills for faster subsequent builds
+   - Generate validation warnings for invalid Skills
+
+6. **Create Configuration Files**
    - Generate `config.yml` in `/home/vcap/deps/{INDEX}/config.yml`
    - **REQUIRED**: Include `name` field at root level for Java buildpack compatibility
    - Include paths, binaries, and environment setup
@@ -340,6 +361,22 @@ claudeCode:
       url: "https://github-mcp.example.com/sse"
       env:
         GITHUB_TOKEN: "${GITHUB_PERSONAL_ACCESS_TOKEN}"
+
+  # Skills Configuration (NEW - November 2025)
+  skills:
+    # Git-based Skills (cloned during staging)
+    - name: team-workflow-skills
+      git:
+        url: https://github.com/your-org/team-skills.git
+        ref: main              # Optional: branch, tag, or commit
+        path: skills/          # Optional: subdirectory within repo
+        
+    - name: security-review
+      git:
+        url: https://github.com/security-team/claude-skills.git
+        ref: v1.2.0            # Pin to specific version
+    
+    # Bundled Skills in .claude/skills/ are automatically discovered
 ```
 
 ### 5. Environment Variables
@@ -358,6 +395,107 @@ claudeCode:
   - *Can also be set in config file as `model`*
   - Options: `sonnet`, `opus`, `haiku`
 - `NODE_VERSION`: Node.js version for CLI (default: latest LTS)
+
+---
+
+## Claude Skills Configuration
+
+### Skills Support (November 2025)
+
+The buildpack supports Claude Skills, which are modular capabilities that extend Claude's functionality through organized folders containing instructions, scripts, and resources.
+
+### Configuration
+
+Skills can be configured in two ways:
+
+1. **Bundled Skills**: Place Skills directly in `.claude/skills/` within your application
+2. **Git-Based Skills**: Clone Skills from HTTPS git repositories during staging
+
+### Bundled Skills
+
+Create Skills in your application's `.claude/skills/` directory:
+
+```
+my-app/
+├── .claude/
+│   └── skills/
+│       ├── commit-helper/
+│       │   └── SKILL.md
+│       └── code-reviewer/
+│           ├── SKILL.md
+│           └── scripts/
+│               └── analyze.py
+```
+
+Bundled Skills are automatically discovered during staging—no configuration needed.
+
+### Git-Based Skills
+
+Configure git-based Skills in `.claude-code-config.yml`:
+
+```yaml
+claudeCode:
+  enabled: true
+  
+  skills:
+    - name: team-workflow-skills
+      git:
+        url: https://github.com/your-org/team-skills.git
+        ref: main              # Optional: branch, tag, or commit
+        path: skills/          # Optional: subdirectory within repo
+        
+    - name: security-review
+      git:
+        url: https://github.com/security-team/claude-skills.git
+        ref: v1.2.0            # Pin to specific version
+```
+
+### SKILL.md Format
+
+Every Skill must have a `SKILL.md` file with YAML frontmatter:
+
+```yaml
+---
+name: your-skill-name
+description: Brief description of what this Skill does and when to use it
+---
+
+# Your Skill Name
+
+## Instructions
+Provide clear, step-by-step guidance for Claude.
+
+## Examples
+Show concrete examples of using this Skill.
+```
+
+### Security Restrictions
+
+- **HTTPS only**: Only `https://` URLs allowed (no `git://`, `file://`, or `http://`)
+- **Clone timeout**: 60 seconds maximum
+- **Repository size**: 50MB maximum per Skill
+- **Validation**: SKILL.md must have valid YAML frontmatter with `name` and `description` fields
+
+### Caching
+
+Git-based Skills are cached between builds:
+- **Cache key**: Hash of `${skill_name}::${git_url}::${ref}`
+- **Invalidation**: When URL, ref, or name changes
+- **Location**: `${CACHE_DIR}/claude-skills/`
+
+### Implementation
+
+**File:** `lib/claude_configurator.sh` (renamed from `mcp_configurator.sh`)
+
+**Functions:**
+- `validate_git_url()` - Security validation for git URLs
+- `parse_skills_config()` - Extract Skills configuration from YAML
+- `clone_git_skill()` - Clone git repository with caching
+- `validate_skill_structure()` - Verify SKILL.md format
+- `list_installed_skills()` - List discovered Skills
+- `configure_skills()` - Main Skills configuration orchestrator
+
+**See:** [SKILLS.md](SKILLS.md) for complete documentation
 
 ---
 
@@ -1064,10 +1202,10 @@ claude-code-buildpack/
 │   ├── supply
 │   └── finalize
 ├── lib/
-│   ├── installer.sh        # Node.js and Claude Code installation
-│   ├── mcp_configurator.sh # MCP server configuration (NEW - Phase 2)
-│   ├── validator.sh        # Validation utilities
-│   └── environment.sh      # Environment variable setup
+│   ├── installer.sh           # Node.js and Claude Code installation
+│   ├── claude_configurator.sh # MCP, Skills, and settings configuration
+│   ├── validator.sh           # Validation utilities
+│   └── environment.sh         # Environment variable setup
 ├── examples/               # Configuration examples (NEW - Phase 2)
 │   ├── .claude-code-config.yml              # Full-featured example
 │   ├── .claude-code-config-minimal.yml      # Minimal example
@@ -1075,9 +1213,10 @@ claude-code-buildpack/
 ├── tests/
 │   ├── unit/
 │   │   ├── run_tests.sh
-│   │   ├── test_detect.sh           # 5 tests
-│   │   ├── test_validator.sh        # 11 tests
-│   │   └── test_mcp_configurator.sh # 19 tests (NEW - Phase 2)
+│   │   ├── test_detect.sh              # 5 tests
+│   │   ├── test_validator.sh           # 11 tests
+│   │   ├── test_mcp_configurator.sh    # 26 tests (Phase 2)
+│   │   └── test_skills_configurator.sh # 20 tests (NEW - Skills Support)
 │   └── fixtures/
 ├── docs/
 │   ├── PHASE1_SUMMARY.md   # Phase 1 implementation notes
@@ -1089,7 +1228,11 @@ claude-code-buildpack/
 ├── LICENSE
 └── README.md
 
-**Total Test Coverage:** 35 unit tests, 100% passing ✓
+**Total Test Coverage:** 62 unit tests, 100% passing ✓
+- 5 detection tests
+- 11 validator tests
+- 26 MCP configurator tests
+- 20 Skills configurator tests (NEW)
 ```
 
 ---
@@ -1344,9 +1487,20 @@ export NODE_EXTRA_CA_CERTS=/tmp/ca-bundle.crt
 - ✅ Configuration settings (logLevel, version, model)
 - ✅ Python-based YAML parser (robust and maintainable)
 - ✅ Configuration validation
-- ✅ 19 unit tests (100% passing)
+- ✅ 26 unit tests (100% passing)
 - ✅ Comprehensive documentation and examples
 - ✅ Remote MCP server support
+
+### Skills Support (✅ Completed - November 2025):
+- ✅ Bundled Skills auto-discovery from `.claude/skills/`
+- ✅ Git-based Skills with HTTPS cloning and caching
+- ✅ YAML configuration parsing (Python-based)
+- ✅ SKILL.md validation (frontmatter, name, description)
+- ✅ Security restrictions (HTTPS only, 60s timeout, 50MB max)
+- ✅ Intelligent caching between builds
+- ✅ 20 comprehensive unit tests (100% passing)
+- ✅ Complete documentation (SKILLS.md, README updates)
+- ✅ Renamed `mcp_configurator.sh` to `claude_configurator.sh`
 
 ### Phase 3 Functionality (✅ Completed):
 - ✅ Java wrapper library for easier integration
@@ -1447,11 +1601,12 @@ This buildpack enables seamless integration of Claude Code CLI into Cloud Foundr
 
 ### Key Achievements
 
-- ✅ 35 unit tests, 100% passing (Phases 1 & 2)
+- ✅ 62 unit tests, 100% passing (Phases 1, 2, 3 & Skills)
 - ✅ Comprehensive MCP configuration support
 - ✅ Remote and local MCP server integration
+- ✅ **Claude Skills support (bundled & git-based)** 🎯
 - ✅ Flexible YAML-based configuration
-- ✅ Production-ready Phases 1, 2 & 3 implementation
+- ✅ Production-ready Phases 1, 2, 3 & Skills implementation
 - ✅ Java wrapper library with Spring Boot integration
 - ✅ **True line-by-line streaming** from Process.getInputStream()
 - ✅ Complete documentation with working examples
@@ -1460,6 +1615,8 @@ This buildpack enables seamless integration of Claude Code CLI into Cloud Foundr
 - ✅ Background timeout enforcement prevents runaway processes
 - ✅ Spring WebFlux integration with Flux.using() pattern
 - ✅ 10 comprehensive streaming usage examples
+- ✅ Skills validation, caching, and security
+- ✅ Comprehensive Skills documentation (SKILLS.md)
 
 ---
 
