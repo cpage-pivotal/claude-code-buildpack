@@ -550,6 +550,8 @@ for line in lines:
                 match = re.search(r'url:\s*(.+)', stripped)
                 if match:
                     url = match.group(1).strip().strip('"').strip("'")
+                    # Strip YAML comments (everything after #)
+                    url = url.split('#')[0].strip()
                     current_git['url'] = url
             
             # Ref (branch, tag, or commit)
@@ -557,6 +559,8 @@ for line in lines:
                 match = re.search(r'ref:\s*(.+)', stripped)
                 if match:
                     ref = match.group(1).strip().strip('"').strip("'")
+                    # Strip YAML comments (everything after #)
+                    ref = ref.split('#')[0].strip()
                     current_git['ref'] = ref
             
             # Path (subdirectory within repo)
@@ -564,6 +568,8 @@ for line in lines:
                 match = re.search(r'path:\s*(.+)', stripped)
                 if match:
                     path = match.group(1).strip().strip('"').strip("'")
+                    # Strip YAML comments (everything after #)
+                    path = path.split('#')[0].strip()
                     current_git['path'] = path
 
 # Add last skill

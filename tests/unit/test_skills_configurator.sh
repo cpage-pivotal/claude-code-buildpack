@@ -355,8 +355,47 @@ else
     assert_failure "parse_skills_config should succeed"
 fi
 
-# Test 20: Validate Skill with supporting files
-print_test_header "Test 20: Validate Skill with supporting files"
+# Test 20: Parse Skills config with YAML comments
+print_test_header "Test 20: Parse Skills config with YAML comments"
+cat > "${TEST_DIR}/config.yml" <<'EOF'
+claudeCode:
+  enabled: true
+  skills:
+    - name: limerick-skill
+      git:
+        url: https://github.com/cpage-pivotal/limerick-skill.git
+        ref: main              # Optional: branch, tag, or commit
+        path: skills/          # Optional: subdirectory
+EOF
+
+if parse_skills_config "${TEST_DIR}/config.yml" "${TEST_DIR}/skills.json" >/dev/null 2>&1; then
+    if [ -f "${TEST_DIR}/skills.json" ]; then
+        # Verify ref is parsed correctly without the comment
+        if grep -q '"ref": "main"' "${TEST_DIR}/skills.json" && \
+           ! grep -q '# Optional' "${TEST_DIR}/skills.json"; then
+            assert_success "Should strip YAML comments from ref field"
+        else
+            echo "DEBUG: skills.json contents:"
+            cat "${TEST_DIR}/skills.json"
+            assert_failure "Should strip YAML comments from ref field"
+        fi
+        
+        # Verify path is parsed correctly without the comment
+        if grep -q '"path": "skills/"' "${TEST_DIR}/skills.json" && \
+           ! grep -q '# Optional' "${TEST_DIR}/skills.json"; then
+            assert_success "Should strip YAML comments from path field"
+        else
+            assert_failure "Should strip YAML comments from path field"
+        fi
+    else
+        assert_failure "skills.json should exist"
+    fi
+else
+    assert_failure "parse_skills_config should succeed"
+fi
+
+# Test 21: Validate Skill with supporting files
+print_test_header "Test 21: Validate Skill with supporting files"
 mkdir -p "${TEST_DIR}/skill-with-files/scripts"
 mkdir -p "${TEST_DIR}/skill-with-files/templates"
 cat > "${TEST_DIR}/skill-with-files/SKILL.md" <<'EOF'

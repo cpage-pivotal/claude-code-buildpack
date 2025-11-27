@@ -368,8 +368,8 @@ claudeCode:
     - name: team-workflow-skills
       git:
         url: https://github.com/your-org/team-skills.git
-        ref: main              # Optional: branch, tag, or commit
-        path: skills/          # Optional: subdirectory within repo
+        ref: main              # branch, tag, or commit (optional)
+        path: skills/          # subdirectory within repo (optional)
         
     - name: security-review
       git:
@@ -441,8 +441,8 @@ claudeCode:
     - name: team-workflow-skills
       git:
         url: https://github.com/your-org/team-skills.git
-        ref: main              # Optional: branch, tag, or commit
-        path: skills/          # Optional: subdirectory within repo
+        ref: main              # branch, tag, or commit (optional)
+        path: skills/          # subdirectory within repo (optional)
         
     - name: security-review
       git:

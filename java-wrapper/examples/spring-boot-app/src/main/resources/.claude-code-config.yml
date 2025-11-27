@@ -11,3 +11,10 @@ claudeCode:
     - name: github
       type: sse
       url: "https://github-mcp-server.apps.tas-ndc.kuhn-labs.com/sse"
+
+  skills:
+    # Clone from git repository
+    - name: limerick-skill
+      git:
+        url: https://github.com/cpage-pivotal/limerick-skill.git
+        ref: main

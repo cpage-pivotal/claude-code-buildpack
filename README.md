@@ -566,14 +566,14 @@ claudeCode:
     - name: team-workflow-skills
       git:
         url: https://github.com/your-org/team-skills.git
-        ref: main              # Optional: branch, tag, or commit
-        path: skills/          # Optional: subdirectory within repo
+        ref: main              # branch, tag, or commit (optional)
+        path: skills/          # subdirectory within repo (optional)
         
     # Pin to specific version
     - name: security-review
       git:
         url: https://github.com/security-team/claude-skills.git
-        ref: v1.2.0            # Recommended: use tags for stability
+        ref: v1.2.0            # use tags for stability
 ```
 
 **Git configuration options**:
