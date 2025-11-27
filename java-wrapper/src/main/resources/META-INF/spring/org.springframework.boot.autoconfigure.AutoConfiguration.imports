@@ -1,2 +1,2 @@
-io.github.claudecode.cf.spring.ClaudeCodeAutoConfiguration
+org.tanzu.claudecode.cf.spring.ClaudeCodeAutoConfiguration
 

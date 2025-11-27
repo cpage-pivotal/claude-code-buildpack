@@ -1,7 +1,7 @@
 package com.example.demo;
 
-import io.github.claudecode.cf.ClaudeCodeExecutor;
-import io.github.claudecode.cf.ClaudeCodeOptions;
+import org.tanzu.claudecode.cf.ClaudeCodeExecutor;
+import org.tanzu.claudecode.cf.ClaudeCodeOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;

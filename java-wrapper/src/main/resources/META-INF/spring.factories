@@ -1,2 +1,2 @@
 org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
-io.github.claudecode.cf.spring.ClaudeCodeAutoConfiguration
+org.tanzu.claudecode.cf.spring.ClaudeCodeAutoConfiguration

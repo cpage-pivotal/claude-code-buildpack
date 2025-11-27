@@ -1,4 +1,4 @@
-package io.github.claudecode.cf;
+package org.tanzu.claudecode.cf;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
@@ -184,3 +184,4 @@ public interface ClaudeCodeExecutor {
      */
     String getVersion();
 }
+

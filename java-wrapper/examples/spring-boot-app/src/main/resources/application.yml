@@ -14,5 +14,5 @@ server:
 # Logging
 logging:
   level:
-    io.github.claudecode: DEBUG
+    org.tanzu.claudecode: DEBUG
     com.example.demo: INFO

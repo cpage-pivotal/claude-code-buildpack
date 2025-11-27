@@ -1,4 +1,4 @@
-package io.github.claudecode.cf;
+package org.tanzu.claudecode.cf;
 
 import java.time.Duration;
 import java.util.HashMap;
@@ -208,3 +208,4 @@ public class ClaudeCodeOptions {
                 '}';
     }
 }
+

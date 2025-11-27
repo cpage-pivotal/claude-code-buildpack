@@ -1,8 +1,8 @@
 package com.example.demo;
 
-import io.github.claudecode.cf.ClaudeCodeExecutor;
-import io.github.claudecode.cf.ClaudeCodeExecutorImpl;
-import io.github.claudecode.cf.ClaudeCodeOptions;
+import org.tanzu.claudecode.cf.ClaudeCodeExecutor;
+import org.tanzu.claudecode.cf.ClaudeCodeExecutorImpl;
+import org.tanzu.claudecode.cf.ClaudeCodeOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

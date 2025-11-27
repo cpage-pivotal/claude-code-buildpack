@@ -186,7 +186,7 @@ claude-code:
 
 logging:
   level:
-    io.github.claudecode: DEBUG
+    org.tanzu.claudecode: DEBUG
 ```
 
 ## Troubleshooting

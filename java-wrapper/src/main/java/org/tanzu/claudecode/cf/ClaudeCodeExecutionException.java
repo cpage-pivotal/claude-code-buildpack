@@ -1,4 +1,4 @@
-package io.github.claudecode.cf;
+package org.tanzu.claudecode.cf;
 
 /**
  * Exception thrown when Claude Code CLI execution fails.
@@ -123,3 +123,4 @@ public class ClaudeCodeExecutionException extends RuntimeException {
         return sb.toString();
     }
 }
+

@@ -1,7 +1,7 @@
-package io.github.claudecode.cf.spring;
+package org.tanzu.claudecode.cf.spring;
 
-import io.github.claudecode.cf.ClaudeCodeExecutor;
-import io.github.claudecode.cf.ClaudeCodeExecutorImpl;
+import org.tanzu.claudecode.cf.ClaudeCodeExecutor;
+import org.tanzu.claudecode.cf.ClaudeCodeExecutorImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -111,3 +111,4 @@ public class ClaudeCodeAutoConfiguration {
         return new ClaudeCodeController(executor);
     }
 }
+

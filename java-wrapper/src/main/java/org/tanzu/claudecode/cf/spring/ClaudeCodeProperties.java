@@ -1,4 +1,4 @@
-package io.github.claudecode.cf.spring;
+package org.tanzu.claudecode.cf.spring;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -131,3 +131,4 @@ public class ClaudeCodeProperties {
         this.controllerEnabled = controllerEnabled;
     }
 }
+
