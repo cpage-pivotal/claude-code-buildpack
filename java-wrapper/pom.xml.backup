@@ -100,12 +100,12 @@
         <repository>
             <id>artifact-registry</id>
             <name>GCP Artifact Registry</name>
-            <url>artifactregistry://us-central1-maven.pkg.dev/cf-mcp/maven-public</url>
+            <url>artifactregistry://us-central1-maven.pkg.dev/YOUR_PROJECT_ID/YOUR_REPOSITORY_NAME</url>
         </repository>
         <snapshotRepository>
             <id>artifact-registry</id>
             <name>GCP Artifact Registry Snapshots</name>
-            <url>artifactregistry://us-central1-maven.pkg.dev/cf-mcp/maven-public</url>
+            <url>artifactregistry://us-central1-maven.pkg.dev/YOUR_PROJECT_ID/YOUR_REPOSITORY_NAME</url>
         </snapshotRepository>
     </distributionManagement>
 
