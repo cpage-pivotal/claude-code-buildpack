@@ -23,18 +23,48 @@ A Java library for seamless integration of Claude Code CLI in Cloud Foundry appl
 
 ### Maven
 
+Add the GCP Artifact Registry repository and dependency to your `pom.xml`:
+
 ```xml
-<dependency>
-    <groupId>io.github.claudecode</groupId>
-    <artifactId>claude-code-cf-wrapper</artifactId>
-    <version>1.0.0</version>
-</dependency>
+<repositories>
+    <repository>
+        <id>gcp-maven-public</id>
+        <name>GCP Artifact Registry - Public Maven Repository</name>
+        <url>https://us-central1-maven.pkg.dev/cf-mcp/maven-public</url>
+        <releases>
+            <enabled>true</enabled>
+        </releases>
+        <snapshots>
+            <enabled>false</enabled>
+        </snapshots>
+    </repository>
+</repositories>
+
+<dependencies>
+    <dependency>
+        <groupId>org.tanzu.claudecode</groupId>
+        <artifactId>claude-code-cf-wrapper</artifactId>
+        <version>1.0.0</version>
+    </dependency>
+</dependencies>
 ```
+
+**Note:** This is a public repository - no authentication required!
 
 ### Gradle
 
+Add the repository and dependency to your `build.gradle`:
+
 ```gradle
-implementation 'io.github.claudecode:claude-code-cf-wrapper:1.0.0'
+repositories {
+    maven {
+        url = uri("https://us-central1-maven.pkg.dev/cf-mcp/maven-public")
+    }
+}
+
+dependencies {
+    implementation 'org.tanzu.claudecode:claude-code-cf-wrapper:1.0.0'
+}
 ```
 
 ## Quick Start

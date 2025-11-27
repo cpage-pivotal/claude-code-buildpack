@@ -2,6 +2,57 @@
 
 This document outlines best practices for deploying Spring Boot applications with Claude Code CLI integration to Cloud Foundry.
 
+## Maven Dependency Configuration
+
+This example application uses the Claude Code CF Wrapper library, which is published to GCP Artifact Registry as a public Maven repository.
+
+### Adding the Repository
+
+Add the following repository to your `pom.xml`:
+
+```xml
+<repositories>
+    <repository>
+        <id>gcp-maven-public</id>
+        <name>GCP Artifact Registry - Public Maven Repository</name>
+        <url>https://us-central1-maven.pkg.dev/cf-mcp/maven-public</url>
+        <releases>
+            <enabled>true</enabled>
+        </releases>
+        <snapshots>
+            <enabled>false</enabled>
+        </snapshots>
+    </repository>
+</repositories>
+```
+
+### Adding the Dependency
+
+```xml
+<dependencies>
+    <!-- Claude Code CF Wrapper -->
+    <dependency>
+        <groupId>org.tanzu.claudecode</groupId>
+        <artifactId>claude-code-cf-wrapper</artifactId>
+        <version>1.0.0</version>
+    </dependency>
+</dependencies>
+```
+
+**No authentication required** - the repository is publicly accessible! Maven will automatically download the artifact when you build your project.
+
+### Verifying the Setup
+
+Test that Maven can resolve the dependency:
+
+```bash
+# Clean build to force dependency download
+mvn clean compile
+
+# Check resolved dependencies
+mvn dependency:tree | grep claude-code-cf-wrapper
+```
+
 ## Configuration File Placement
 
 The `.claude-code-config.yml` file must be in **TWO locations**:
@@ -274,9 +325,24 @@ java -jar target/your-app.jar
 - Skip testing the packaged JAR
 - Deploy without verifying buildpack order
 
+## Publishing Your Own Version
+
+If you need to fork and publish your own version of the wrapper library:
+
+1. **Fork the repository** and make your changes
+2. **Update the POM** with your own groupId and version
+3. **Deploy to your own repository**:
+   ```bash
+   cd java-wrapper
+   mvn clean deploy
+   ```
+
+See [java-wrapper/GCP_DEPLOYMENT.md](../../GCP_DEPLOYMENT.md) for detailed instructions on publishing to GCP Artifact Registry.
+
 ## Resources
 
 - [Claude Code Buildpack README](../../../README.md)
 - [DESIGN.md](../../../DESIGN.md)
 - [Java Wrapper Documentation](../../README.md)
+- [GCP Artifact Registry Deployment Guide](../../GCP_DEPLOYMENT.md)
 - [Cloud Foundry Buildpack Documentation](https://docs.cloudfoundry.org/buildpacks/)

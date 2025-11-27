@@ -12,7 +12,8 @@ This buildpack installs the Claude Code CLI and Node.js runtime into your Cloud 
 - 🔐 Secure API key management via environment variables
 - 🔌 MCP (Model Context Protocol) server support ✅
 - 🎯 Skills configuration (bundled and git-based) ✅
-- ☕ Java wrapper library for easy integration (Phase 3)
+- ☕ Java wrapper library for easy integration ✅
+- 📦 Public Maven repository (GCP Artifact Registry) ✅
 - 📡 Real-time streaming output support
 - 💾 Intelligent caching for faster builds
 
@@ -197,7 +198,42 @@ claudeCode:
 
 After deployment, the Claude Code CLI is available at the path specified in the `CLAUDE_CLI_PATH` environment variable.
 
-### Basic Example
+### Using the Java Wrapper Library
+
+For production applications, we recommend using the official Java wrapper library instead of manually invoking ProcessBuilder. The wrapper provides a clean API, proper error handling, and Spring Boot integration.
+
+**Add to your `pom.xml`:**
+
+```xml
+<repositories>
+    <repository>
+        <id>gcp-maven-public</id>
+        <url>https://us-central1-maven.pkg.dev/cf-mcp/maven-public</url>
+    </repository>
+</repositories>
+
+<dependencies>
+    <dependency>
+        <groupId>org.tanzu.claudecode</groupId>
+        <artifactId>claude-code-cf-wrapper</artifactId>
+        <version>1.0.0</version>
+    </dependency>
+</dependencies>
+```
+
+**Simple usage:**
+
+```java
+import org.tanzu.claudecode.cf.ClaudeCodeExecutor;
+import org.tanzu.claudecode.cf.ClaudeCodeExecutorImpl;
+
+ClaudeCodeExecutor executor = new ClaudeCodeExecutorImpl();
+String result = executor.execute("Analyze this code for potential bugs");
+```
+
+For complete documentation, see the [Java Wrapper README](java-wrapper/README.md).
+
+### Basic Example (Manual ProcessBuilder)
 
 ```java
 import java.io.*;
@@ -832,10 +868,12 @@ Then redeploy with `cf push`.
 - [x] Unit tests (12 tests passing)
 - [x] Documentation and examples
 
-### Phase 3: Java Integration (Planned)
-- [ ] Java wrapper library
-- [ ] Spring Boot integration
-- [ ] Server-Sent Events support
+### Phase 3: Java Integration ✅ Complete
+- [x] Java wrapper library
+- [x] Spring Boot auto-configuration
+- [x] REST API controller
+- [x] Server-Sent Events support for streaming
+- [x] Published to GCP Artifact Registry (public access)
 
 ### Phase 4: Production Readiness (Planned)
 - [ ] Security hardening

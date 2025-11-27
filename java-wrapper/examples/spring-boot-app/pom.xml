@@ -23,6 +23,20 @@
         <java.version>21</java.version>
     </properties>
 
+    <repositories>
+        <repository>
+            <id>gcp-maven-public</id>
+            <name>GCP Artifact Registry - Public Maven Repository</name>
+            <url>https://us-central1-maven.pkg.dev/cf-mcp/maven-public</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+
     <dependencies>
         <!-- Spring Boot -->
         <dependency>
