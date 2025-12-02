@@ -579,6 +579,227 @@ else
     assert_failure "Should create default settings.json when settings section is missing"
 fi
 
+# ============================================================================
+# Deny List Tests
+# ============================================================================
+
+# Test: Parse settings with deny list (permission-based)
+print_test_header "Test: Parse settings with deny list (permission-based)"
+cat > "${TEST_DIR}/.claude-code-config-deny.yml" <<'EOF'
+claudeCode:
+  enabled: true
+  settings:
+    alwaysThinkingEnabled: true
+    permissions:
+      deny:
+        - "Bash(curl:*)"
+        - "Bash(npm run deploy)"
+        - "Read(./.env)"
+        - "Read(./secrets/**)"
+        - "WebFetch"
+EOF
+
+output_file="${TEST_DIR}/.claude-settings-test.json"
+if parse_settings_from_yaml "${TEST_DIR}/.claude-code-config-deny.yml" "${output_file}"; then
+    if [ -f "${output_file}" ] && \
+       grep -q '"alwaysThinkingEnabled": true' "${output_file}" && \
+       grep -q '"permissions"' "${output_file}" && \
+       grep -q '"deny"' "${output_file}" && \
+       grep -q '"Bash(curl:\*)"' "${output_file}" && \
+       grep -q '"WebFetch"' "${output_file}"; then
+        assert_success "Should parse settings with deny list"
+    else
+        echo "Generated settings.json:"
+        cat "${output_file}"
+        assert_failure "Should parse settings with deny list"
+    fi
+else
+    assert_failure "Should parse settings with deny list"
+fi
+
+# Test: Parse settings with MCP tool denials
+print_test_header "Test: Parse settings with MCP tool denials"
+cat > "${TEST_DIR}/.claude-code-config-mcp-deny.yml" <<'EOF'
+claudeCode:
+  enabled: true
+  settings:
+    alwaysThinkingEnabled: true
+    permissions:
+      deny:
+        - "mcp__github__create_issue"
+        - "mcp__github__delete_repository"
+        - "mcp__filesystem__write_file"
+EOF
+
+output_file2="${TEST_DIR}/.claude-settings-mcp-test.json"
+if parse_settings_from_yaml "${TEST_DIR}/.claude-code-config-mcp-deny.yml" "${output_file2}"; then
+    if [ -f "${output_file2}" ] && \
+       grep -q '"mcp__github__create_issue"' "${output_file2}" && \
+       grep -q '"mcp__filesystem__write_file"' "${output_file2}"; then
+        assert_success "Should parse settings with MCP tool denials"
+    else
+        echo "Generated settings.json:"
+        cat "${output_file2}"
+        assert_failure "Should parse settings with MCP tool denials"
+    fi
+else
+    assert_failure "Should parse settings with MCP tool denials"
+fi
+
+# Test: Parse settings with mixed denials
+print_test_header "Test: Parse settings with mixed denials (permission + MCP)"
+cat > "${TEST_DIR}/.claude-code-config-mixed-deny.yml" <<'EOF'
+claudeCode:
+  enabled: true
+  settings:
+    alwaysThinkingEnabled: false
+    permissions:
+      deny:
+        - "Bash(curl:*)"
+        - "WebFetch"
+        - "mcp__github__create_issue"
+        - "mcp__filesystem__write_file"
+        - "Read(./.env)"
+EOF
+
+output_file3="${TEST_DIR}/.claude-settings-mixed-test.json"
+if parse_settings_from_yaml "${TEST_DIR}/.claude-code-config-mixed-deny.yml" "${output_file3}"; then
+    if [ -f "${output_file3}" ] && \
+       grep -q '"alwaysThinkingEnabled": false' "${output_file3}" && \
+       grep -q '"Bash(curl:\*)"' "${output_file3}" && \
+       grep -q '"WebFetch"' "${output_file3}" && \
+       grep -q '"mcp__github__create_issue"' "${output_file3}" && \
+       grep -q '"Read(./.env)"' "${output_file3}"; then
+        # Verify we have 5 deny rules
+        deny_count=$(grep -o '"Bash\|"WebFetch\|"mcp__\|"Read' "${output_file3}" | wc -l)
+        if [ "${deny_count}" -ge 5 ]; then
+            assert_success "Should parse settings with mixed denials"
+        else
+            echo "Expected 5 deny rules, found ${deny_count}"
+            cat "${output_file3}"
+            assert_failure "Should parse settings with mixed denials"
+        fi
+    else
+        echo "Generated settings.json:"
+        cat "${output_file3}"
+        assert_failure "Should parse settings with mixed denials"
+    fi
+else
+    assert_failure "Should parse settings with mixed denials"
+fi
+
+# Test: Parse settings without deny list
+print_test_header "Test: Parse settings without deny list"
+cat > "${TEST_DIR}/.claude-code-config-no-deny.yml" <<'EOF'
+claudeCode:
+  enabled: true
+  settings:
+    alwaysThinkingEnabled: true
+EOF
+
+output_file4="${TEST_DIR}/.claude-settings-no-deny-test.json"
+if parse_settings_from_yaml "${TEST_DIR}/.claude-code-config-no-deny.yml" "${output_file4}"; then
+    if [ -f "${output_file4}" ] && \
+       grep -q '"alwaysThinkingEnabled": true' "${output_file4}" && \
+       ! grep -q '"permissions"' "${output_file4}"; then
+        assert_success "Should parse settings without deny list (no permissions key)"
+    else
+        echo "Generated settings.json:"
+        cat "${output_file4}"
+        assert_failure "Should parse settings without deny list (no permissions key)"
+    fi
+else
+    assert_failure "Should parse settings without deny list"
+fi
+
+# Test: Generate settings.json with deny rules
+print_test_header "Test: Generate settings.json with deny rules"
+cat > "${TEST_DIR}/.claude-code-config-full.yml" <<'EOF'
+claudeCode:
+  enabled: true
+  logLevel: debug
+  settings:
+    alwaysThinkingEnabled: true
+    permissions:
+      deny:
+        - "Bash(curl:*)"
+        - "WebFetch"
+        - "mcp__github__create_issue"
+EOF
+
+export CLAUDE_CODE_CONFIG_FILE="${TEST_DIR}/.claude-code-config-full.yml"
+rm -rf "${TEST_DIR}/.claude"
+generate_claude_settings_json "${TEST_DIR}"
+
+settings_file="${TEST_DIR}/.claude/settings.json"
+if [ -f "${settings_file}" ] && \
+   grep -q '"alwaysThinkingEnabled": true' "${settings_file}" && \
+   grep -q '"permissions"' "${settings_file}" && \
+   grep -q '"deny"' "${settings_file}" && \
+   grep -q '"Bash(curl:\*)"' "${settings_file}" && \
+   grep -q '"mcp__github__create_issue"' "${settings_file}"; then
+    assert_success "Should generate settings.json with deny rules"
+else
+    echo "Generated settings.json:"
+    [ -f "${settings_file}" ] && cat "${settings_file}" || echo "File not found"
+    assert_failure "Should generate settings.json with deny rules"
+fi
+
+# Test: Generate default settings.json without configuration
+print_test_header "Test: Generate default settings.json without deny configuration"
+rm -f "${TEST_DIR}/.claude-code-config-full.yml"
+rm -rf "${TEST_DIR}/.claude"
+unset CLAUDE_CODE_CONFIG_FILE
+generate_claude_settings_json "${TEST_DIR}"
+
+settings_file2="${TEST_DIR}/.claude/settings.json"
+if [ -f "${settings_file2}" ] && \
+   grep -q '"alwaysThinkingEnabled": true' "${settings_file2}" && \
+   ! grep -q '"permissions"' "${settings_file2}"; then
+    assert_success "Should generate default settings.json without permissions"
+else
+    echo "Generated settings.json:"
+    [ -f "${settings_file2}" ] && cat "${settings_file2}" || echo "File not found"
+    assert_failure "Should generate default settings.json without permissions"
+fi
+
+# Test: Handle empty deny list
+print_test_header "Test: Handle empty deny list"
+cat > "${TEST_DIR}/.claude-code-config-empty-deny.yml" <<'EOF'
+claudeCode:
+  enabled: true
+  settings:
+    alwaysThinkingEnabled: true
+    permissions:
+      deny:
+EOF
+
+output_file5="${TEST_DIR}/.claude-settings-empty-deny-test.json"
+if parse_settings_from_yaml "${TEST_DIR}/.claude-code-config-empty-deny.yml" "${output_file5}"; then
+    if [ -f "${output_file5}" ] && \
+       grep -q '"alwaysThinkingEnabled": true' "${output_file5}"; then
+        # Empty deny list should not add permissions key
+        if ! grep -q '"permissions"' "${output_file5}"; then
+            assert_success "Should handle empty deny list (no permissions key)"
+        else
+            # OR it could have empty array - both are acceptable
+            if grep -q '"deny": \[\]' "${output_file5}"; then
+                assert_success "Should handle empty deny list (empty array)"
+            else
+                echo "Generated settings.json:"
+                cat "${output_file5}"
+                assert_failure "Should handle empty deny list correctly"
+            fi
+        fi
+    else
+        echo "Generated settings.json:"
+        cat "${output_file5}"
+        assert_failure "Should handle empty deny list"
+    fi
+else
+    assert_failure "Should handle empty deny list"
+fi
+
 # Print summary
 echo ""
 echo "======================================"
