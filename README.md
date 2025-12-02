@@ -524,21 +524,31 @@ Learn more: [Claude Skills Documentation](https://code.claude.com/docs/en/skills
 
 ### Bundled Skills
 
-Bundle Skills directly in your application by placing them in `.claude/skills/`:
+Bundle Skills directly in your application:
+
+**For Spring Boot applications**, place Skills in `src/main/resources/.claude/skills/`:
 
 ```
 my-app/
-├── .claude/
-│   └── skills/
-│       ├── commit-helper/
-│       │   └── SKILL.md
-│       └── code-reviewer/
-│           ├── SKILL.md
-│           └── scripts/
-│               └── analyze.py
-├── .claude-code-config.yml
+├── src/
+│   └── main/
+│       └── resources/
+│           ├── .claude/
+│           │   └── skills/
+│           │       ├── commit-helper/
+│           │       │   └── SKILL.md
+│           │       └── code-reviewer/
+│           │           ├── SKILL.md
+│           │           └── scripts/
+│           │               └── analyze.py
+│           └── .claude-code-config.yml
+├── pom.xml
 └── ... (other files)
 ```
+
+Spring Boot packages this into `BOOT-INF/classes/.claude/skills/` in the JAR, and the buildpack extracts it during staging.
+
+**For source deployments**, place Skills in `.claude/skills/` at the application root.
 
 **SKILL.md format**:
 
