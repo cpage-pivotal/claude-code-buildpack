@@ -55,21 +55,17 @@ mvn dependency:tree | grep claude-code-cf-wrapper
 
 ## Configuration File Placement
 
-The `.claude-code-config.yml` file must be in **TWO locations**:
+Place `.claude-code-config.yml` in `src/main/resources/`:
 
-### 1. Application Root (Required for Buildpack Detection)
-```
-/my-app/.claude-code-config.yml
-```
-
-The Claude Code buildpack's detect script looks for this file in the BUILD_DIR during staging. Without it, the buildpack won't be applied.
-
-### 2. src/main/resources (Required for Runtime)
 ```
 /my-app/src/main/resources/.claude-code-config.yml
 ```
 
-This copy gets packaged into the JAR file at `BOOT-INF/classes/.claude-code-config.yml` and is available to the application at runtime via the classpath.
+**How it works:**
+1. Spring Boot packages the file into your JAR at `BOOT-INF/classes/.claude-code-config.yml`
+2. When you deploy to Cloud Foundry, the Java buildpack explodes (extracts) the JAR
+3. The Claude Code buildpack's supply script automatically finds and extracts the config from `BOOT-INF/classes/`
+4. No additional Maven plugins or dual file locations required
 
 ## Maven Configuration
 
@@ -131,11 +127,9 @@ Spring Boot will automatically package `src/main/resources/.claude/` into `BOOT-
 ### Pre-Deployment
 
 - [ ] **Configuration Files**
-  - [ ] `.claude-code-config.yml` exists in application root
   - [ ] `.claude-code-config.yml` exists in `src/main/resources/`
-  - [ ] Both files have identical content
   - [ ] MCP server configurations are correct
-  - [ ] Bundled Skills (if any) are in `.claude/skills/` directory
+  - [ ] Bundled Skills (if any) are in `src/main/resources/.claude/skills/` directory
 
 - [ ] **Build Verification**
   ```bash
@@ -212,10 +206,11 @@ curl https://my-app.example.com/api/claude/health
 ### Issue: Buildpack Not Applied
 **Symptom:** Claude Code CLI not available in container
 
-**Solution:** 
-- Ensure `.claude-code-config.yml` exists in application root
+**Solution:**
+- Ensure `.claude-code-config.yml` exists in `src/main/resources/`
 - Or set `CLAUDE_CODE_ENABLED=true` in manifest
 - Check buildpack order (nodejs → claude-code → java)
+- Verify config is packaged in JAR: `jar tf target/your-app.jar | grep claude-code-config`
 
 ### Issue: Configuration Not Found at Runtime
 **Symptom:** Application can't find `.claude-code-config.yml`
@@ -241,54 +236,6 @@ curl https://my-app.example.com/api/claude/health
 - Check security groups allow outbound HTTPS
 - Verify MCP server URLs are accessible from CF
 
-## File Synchronization
-
-To keep both copies of `.claude-code-config.yml` in sync:
-
-### Option 1: Manual Sync
-```bash
-# After editing the file in src/main/resources
-cp src/main/resources/.claude-code-config.yml .
-```
-
-### Option 2: Maven Copy Plugin
-Add to your `pom.xml`:
-
-```xml
-<plugin>
-    <groupId>org.apache.maven.plugins</groupId>
-    <artifactId>maven-resources-plugin</artifactId>
-    <executions>
-        <execution>
-            <id>copy-config-to-root</id>
-            <phase>validate</phase>
-            <goals>
-                <goal>copy-resources</goal>
-            </goals>
-            <configuration>
-                <outputDirectory>${basedir}</outputDirectory>
-                <resources>
-                    <resource>
-                        <directory>src/main/resources</directory>
-                        <includes>
-                            <include>.claude-code-config.yml</include>
-                        </includes>
-                    </resource>
-                </resources>
-            </configuration>
-        </execution>
-    </executions>
-</plugin>
-```
-
-### Option 3: Git Pre-commit Hook
-```bash
-# .git/hooks/pre-commit
-#!/bin/bash
-cp src/main/resources/.claude-code-config.yml .claude-code-config.yml
-git add .claude-code-config.yml
-```
-
 ## Testing Locally
 
 Before deploying to Cloud Foundry, test locally:
@@ -311,19 +258,19 @@ java -jar target/your-app.jar
 ## Best Practices Summary
 
 ✅ **DO:**
-- Keep both config files in sync
-- Use `src/main/resources/` as the source of truth
-- Version control both copies
+- Place config file in `src/main/resources/`
 - Test the built JAR before deploying
 - Use environment variables for sensitive data
 - Verify health endpoints after deployment
+- Verify config is packaged in JAR with `jar tf`
+- Follow standard Spring Boot resource conventions
 
 ❌ **DON'T:**
 - Hardcode API keys in config files
 - Commit API keys to version control
-- Forget to update both config copies
 - Skip testing the packaged JAR
 - Deploy without verifying buildpack order
+- Use complex Maven plugins when standard conventions work
 
 ## Publishing Your Own Version
 

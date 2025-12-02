@@ -72,43 +72,15 @@ The buildpack will activate when any of the following conditions are met:
 
 ## Spring Boot JAR Deployment
 
-When deploying a Spring Boot JAR file, you need to embed `.claude-code-config.yml` in the JAR root for the buildpack to detect it during staging.
+When deploying a Spring Boot JAR file, simply place your `.claude-code-config.yml` file in `src/main/resources/` and Spring Boot will automatically package it into the JAR.
 
-**Add to your `pom.xml`:**
+**Place your config file here:**
 
-```xml
-<build>
-    <plugins>
-        <plugin>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-maven-plugin</artifactId>
-        </plugin>
-
-        <!-- Add config file to JAR root after Spring Boot repackaging -->
-        <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-antrun-plugin</artifactId>
-            <version>3.1.0</version>
-            <executions>
-                <execution>
-                    <id>add-config-to-jar</id>
-                    <phase>package</phase>
-                    <goals>
-                        <goal>run</goal>
-                    </goals>
-                    <configuration>
-                        <target>
-                            <jar destfile="${project.build.directory}/${project.build.finalName}.jar" update="true">
-                                <fileset dir="${project.basedir}" includes=".claude-code-config.yml"/>
-                            </jar>
-                        </target>
-                    </configuration>
-                </execution>
-            </executions>
-        </plugin>
-    </plugins>
-</build>
 ```
+src/main/resources/.claude-code-config.yml
+```
+
+Spring Boot will package this into `BOOT-INF/classes/.claude-code-config.yml` in the JAR, and the buildpack will automatically find and extract it during staging.
 
 **Build and verify:**
 
@@ -116,11 +88,14 @@ When deploying a Spring Boot JAR file, you need to embed `.claude-code-config.ym
 # Build your JAR
 mvn clean package
 
-# Verify the config file is at the JAR root (not in BOOT-INF/classes/)
-jar tf target/my-app.jar | head -20
+# Verify the config file is in the JAR
+jar tf target/my-app.jar | grep claude-code-config
 ```
 
-You should see `.claude-code-config.yml` listed at the root of the JAR.
+You should see:
+```
+BOOT-INF/classes/.claude-code-config.yml
+```
 
 **Deploy the JAR:**
 
@@ -128,14 +103,16 @@ You should see `.claude-code-config.yml` listed at the root of the JAR.
 # manifest.yml
 applications:
   - name: my-java-app
-    path: target/my-app.jar  # Deploy the JAR directly
+    path: target/my-app.jar
     buildpacks:
       - nodejs_buildpack
       - https://github.com/your-org/claude-code-buildpack
       - java_buildpack
+    env:
+      ANTHROPIC_API_KEY: sk-ant-xxxxxxxxxxxxx
 ```
 
-**Important:** The config file must be at the JAR root, not inside `BOOT-INF/classes/`, for the buildpack to detect it during staging. Spring Boot's repackaging places resources in `BOOT-INF/classes/` by default, so the `maven-antrun-plugin` is required to add the file to the JAR root after repackaging.
+**That's it!** No additional Maven plugins required. The buildpack automatically handles extracting the config from `BOOT-INF/classes/` during staging.
 
 ## Configuration
 

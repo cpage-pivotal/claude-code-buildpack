@@ -21,7 +21,6 @@ This is an example Spring Boot application demonstrating integration with Claude
 
 ```
 spring-boot-app/
-├── .claude-code-config.yml           # Root copy for CF buildpack detection
 ├── src/
 │   └── main/
 │       ├── java/
@@ -29,17 +28,16 @@ spring-boot-app/
 │       │       ├── DemoApplication.java
 │       │       └── DemoController.java
 │       └── resources/
-│           ├── .claude-code-config.yml   # Packaged in JAR
+│           ├── .claude-code-config.yml   # Config file location
 │           └── application.yml
 ├── pom.xml
 └── manifest.yml
 ```
 
-**Important:** The `.claude-code-config.yml` file must be in TWO locations:
-1. **Application root** - For Cloud Foundry buildpack detection during staging
-2. **src/main/resources/** - To be packaged in the JAR for runtime access
-
-The Maven build automatically includes the file from `src/main/resources/` in the JAR.
+**Configuration File Location:** Place `.claude-code-config.yml` in `src/main/resources/`:
+- Spring Boot automatically packages it into the JAR at `BOOT-INF/classes/.claude-code-config.yml`
+- The buildpack automatically detects and extracts it during staging
+- No additional Maven plugins required
 
 ## Local Development
 
@@ -89,9 +87,7 @@ cf logs claude-code-demo --recent
 
 ### Configuration
 
-The `.claude-code-config.yml` must exist in TWO locations:
-1. **Application root** - For buildpack detection
-2. **src/main/resources/** - Packaged in JAR for runtime
+Place `.claude-code-config.yml` in `src/main/resources/` and Spring Boot will automatically package it in your JAR. The buildpack will detect it during staging.
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment checklist and troubleshooting.
 
