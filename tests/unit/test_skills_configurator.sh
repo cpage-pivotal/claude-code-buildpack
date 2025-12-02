@@ -45,108 +45,8 @@ assert_failure() {
 TEST_DIR=$(mktemp -d)
 trap "rm -rf ${TEST_DIR}" EXIT
 
-# Test 1: Validate HTTPS git URL
-print_test_header "Test 1: Validate HTTPS git URL"
-if validate_git_url "https://github.com/example/repo.git" >/dev/null 2>&1; then
-    assert_success "Should accept https:// URLs"
-else
-    assert_failure "Should accept https:// URLs"
-fi
-
-# Test 2: Reject file:// URL
-print_test_header "Test 2: Reject file:// URL"
-if validate_git_url "file:///local/path" >/dev/null 2>&1; then
-    assert_failure "Should reject file:// URLs"
-else
-    assert_success "Should reject file:// URLs"
-fi
-
-# Test 3: Reject git:// URL
-print_test_header "Test 3: Reject git:// URL"
-if validate_git_url "git://github.com/example/repo.git" >/dev/null 2>&1; then
-    assert_failure "Should reject git:// URLs"
-else
-    assert_success "Should reject git:// URLs"
-fi
-
-# Test 4: Reject http:// URL
-print_test_header "Test 4: Reject http:// URL"
-if validate_git_url "http://github.com/example/repo.git" >/dev/null 2>&1; then
-    assert_failure "Should reject http:// URLs (must be https)"
-else
-    assert_success "Should reject http:// URLs (must be https)"
-fi
-
-# Test 5: Parse empty Skills config
-print_test_header "Test 5: Parse empty Skills config"
-cat > "${TEST_DIR}/config.yml" <<'EOF'
-claudeCode:
-  enabled: true
-  mcpServers: []
-EOF
-
-if parse_skills_config "${TEST_DIR}/config.yml" "${TEST_DIR}/skills.json" >/dev/null 2>&1; then
-    assert_failure "Should return error when no skills section exists"
-else
-    assert_success "Should return error when no skills section exists"
-fi
-
-# Test 6: Parse config with single git Skill
-print_test_header "Test 6: Parse config with single git Skill"
-cat > "${TEST_DIR}/config.yml" <<'EOF'
-claudeCode:
-  enabled: true
-  skills:
-    - name: test-skill
-      git:
-        url: https://github.com/example/skills.git
-        ref: main
-        path: skills/
-EOF
-
-if parse_skills_config "${TEST_DIR}/config.yml" "${TEST_DIR}/skills.json" >/dev/null 2>&1; then
-    if [ -f "${TEST_DIR}/skills.json" ] && \
-       grep -q '"name": "test-skill"' "${TEST_DIR}/skills.json" && \
-       grep -q '"url": "https://github.com/example/skills.git"' "${TEST_DIR}/skills.json"; then
-        assert_success "Should parse single git Skill"
-    else
-        assert_failure "Should parse single git Skill"
-    fi
-else
-    assert_failure "parse_skills_config should succeed"
-fi
-
-# Test 7: Parse config with multiple git Skills
-print_test_header "Test 7: Parse config with multiple git Skills"
-cat > "${TEST_DIR}/config.yml" <<'EOF'
-claudeCode:
-  enabled: true
-  skills:
-    - name: skill-one
-      git:
-        url: https://github.com/org/skill-one.git
-        ref: v1.0.0
-    - name: skill-two
-      git:
-        url: https://github.com/org/skill-two.git
-        ref: main
-        path: my-skill/
-EOF
-
-if parse_skills_config "${TEST_DIR}/config.yml" "${TEST_DIR}/skills.json" >/dev/null 2>&1; then
-    if [ -f "${TEST_DIR}/skills.json" ] && \
-       grep -q '"skill-one"' "${TEST_DIR}/skills.json" && \
-       grep -q '"skill-two"' "${TEST_DIR}/skills.json"; then
-        assert_success "Should parse multiple git Skills"
-    else
-        assert_failure "Should parse multiple git Skills"
-    fi
-else
-    assert_failure "parse_skills_config should succeed"
-fi
-
-# Test 8: Validate valid Skill structure
-print_test_header "Test 8: Validate valid Skill structure"
+# Test 1: Validate valid Skill structure
+print_test_header "Test 1: Validate valid Skill structure"
 mkdir -p "${TEST_DIR}/valid-skill"
 cat > "${TEST_DIR}/valid-skill/SKILL.md" <<'EOF'
 ---
@@ -165,8 +65,8 @@ else
     assert_failure "Should validate valid Skill structure"
 fi
 
-# Test 9: Reject Skill without SKILL.md
-print_test_header "Test 9: Reject Skill without SKILL.md"
+# Test 2: Reject Skill without SKILL.md
+print_test_header "Test 2: Reject Skill without SKILL.md"
 mkdir -p "${TEST_DIR}/invalid-skill"
 
 if validate_skill_structure "${TEST_DIR}/invalid-skill" >/dev/null 2>&1; then
@@ -175,8 +75,8 @@ else
     assert_success "Should reject Skill without SKILL.md"
 fi
 
-# Test 10: Reject SKILL.md without frontmatter
-print_test_header "Test 10: Reject SKILL.md without frontmatter"
+# Test 3: Reject SKILL.md without frontmatter
+print_test_header "Test 3: Reject SKILL.md without frontmatter"
 mkdir -p "${TEST_DIR}/no-frontmatter"
 cat > "${TEST_DIR}/no-frontmatter/SKILL.md" <<'EOF'
 # My Skill
@@ -190,8 +90,8 @@ else
     assert_success "Should reject SKILL.md without frontmatter"
 fi
 
-# Test 11: Reject SKILL.md missing name field
-print_test_header "Test 11: Reject SKILL.md missing name field"
+# Test 4: Reject SKILL.md missing name field
+print_test_header "Test 4: Reject SKILL.md missing name field"
 mkdir -p "${TEST_DIR}/no-name"
 cat > "${TEST_DIR}/no-name/SKILL.md" <<'EOF'
 ---
@@ -207,8 +107,8 @@ else
     assert_success "Should reject SKILL.md missing name field"
 fi
 
-# Test 12: Reject SKILL.md missing description field
-print_test_header "Test 12: Reject SKILL.md missing description field"
+# Test 5: Reject SKILL.md missing description field
+print_test_header "Test 5: Reject SKILL.md missing description field"
 mkdir -p "${TEST_DIR}/no-description"
 cat > "${TEST_DIR}/no-description/SKILL.md" <<'EOF'
 ---
@@ -224,8 +124,8 @@ else
     assert_success "Should reject SKILL.md missing description field"
 fi
 
-# Test 13: List installed Skills
-print_test_header "Test 13: List installed Skills"
+# Test 6: List installed Skills
+print_test_header "Test 6: List installed Skills"
 mkdir -p "${TEST_DIR}/skills-dir/skill-a"
 mkdir -p "${TEST_DIR}/skills-dir/skill-b"
 cat > "${TEST_DIR}/skills-dir/skill-a/SKILL.md" <<'EOF'
@@ -248,8 +148,8 @@ else
     assert_failure "Should list installed Skills"
 fi
 
-# Test 14: List empty Skills directory
-print_test_header "Test 14: List empty Skills directory"
+# Test 7: List empty Skills directory
+print_test_header "Test 7: List empty Skills directory"
 mkdir -p "${TEST_DIR}/empty-skills"
 
 output=$(list_installed_skills "${TEST_DIR}/empty-skills" 2>&1)
@@ -259,8 +159,8 @@ else
     assert_failure "Should report no Skills in empty directory"
 fi
 
-# Test 15: List non-existent Skills directory
-print_test_header "Test 15: List non-existent Skills directory"
+# Test 8: List non-existent Skills directory
+print_test_header "Test 8: List non-existent Skills directory"
 output=$(list_installed_skills "${TEST_DIR}/nonexistent" 2>&1)
 if echo "${output}" | grep -q "No Skills directory found"; then
     assert_success "Should handle non-existent Skills directory"
@@ -268,8 +168,8 @@ else
     assert_failure "Should handle non-existent Skills directory"
 fi
 
-# Test 16: configure_skills with no config
-print_test_header "Test 16: configure_skills with no config"
+# Test 9: configure_skills with no config
+print_test_header "Test 9: configure_skills with no config"
 rm -rf "${TEST_DIR}/app1"
 mkdir -p "${TEST_DIR}/app1"
 rm -rf "${TEST_DIR}/cache1"
@@ -286,8 +186,8 @@ else
     assert_failure "configure_skills should succeed"
 fi
 
-# Test 17: configure_skills with bundled Skills
-print_test_header "Test 17: configure_skills with bundled Skills"
+# Test 10: configure_skills with bundled Skills
+print_test_header "Test 10: configure_skills with bundled Skills"
 rm -rf "${TEST_DIR}/app2"
 mkdir -p "${TEST_DIR}/app2/.claude/skills/bundled-skill"
 cat > "${TEST_DIR}/app2/.claude/skills/bundled-skill/SKILL.md" <<'EOF'
@@ -309,93 +209,8 @@ else
     assert_failure "Should detect and validate bundled Skills"
 fi
 
-# Test 18: Parse Skills with optional ref field
-print_test_header "Test 18: Parse Skills with optional ref field"
-cat > "${TEST_DIR}/config-no-ref.yml" <<'EOF'
-claudeCode:
-  enabled: true
-  skills:
-    - name: skill-no-ref
-      git:
-        url: https://github.com/example/skill.git
-EOF
-
-if parse_skills_config "${TEST_DIR}/config-no-ref.yml" "${TEST_DIR}/skills-no-ref.json" >/dev/null 2>&1; then
-    if [ -f "${TEST_DIR}/skills-no-ref.json" ] && \
-       grep -q '"name": "skill-no-ref"' "${TEST_DIR}/skills-no-ref.json" && \
-       grep -q '"url": "https://github.com/example/skill.git"' "${TEST_DIR}/skills-no-ref.json"; then
-        assert_success "Should parse Skill without ref field"
-    else
-        assert_failure "Should parse Skill without ref field"
-    fi
-else
-    assert_failure "parse_skills_config should succeed"
-fi
-
-# Test 19: Parse Skills with optional path field
-print_test_header "Test 19: Parse Skills with optional path field"
-cat > "${TEST_DIR}/config-no-path.yml" <<'EOF'
-claudeCode:
-  enabled: true
-  skills:
-    - name: skill-no-path
-      git:
-        url: https://github.com/example/skill.git
-        ref: main
-EOF
-
-if parse_skills_config "${TEST_DIR}/config-no-path.yml" "${TEST_DIR}/skills-no-path.json" >/dev/null 2>&1; then
-    if [ -f "${TEST_DIR}/skills-no-path.json" ] && \
-       grep -q '"name": "skill-no-path"' "${TEST_DIR}/skills-no-path.json"; then
-        assert_success "Should parse Skill without path field"
-    else
-        assert_failure "Should parse Skill without path field"
-    fi
-else
-    assert_failure "parse_skills_config should succeed"
-fi
-
-# Test 20: Parse Skills config with YAML comments
-print_test_header "Test 20: Parse Skills config with YAML comments"
-cat > "${TEST_DIR}/config.yml" <<'EOF'
-claudeCode:
-  enabled: true
-  skills:
-    - name: limerick-skill
-      git:
-        url: https://github.com/cpage-pivotal/limerick-skill.git
-        ref: main              # Optional: branch, tag, or commit
-        path: skills/          # Optional: subdirectory
-EOF
-
-if parse_skills_config "${TEST_DIR}/config.yml" "${TEST_DIR}/skills.json" >/dev/null 2>&1; then
-    if [ -f "${TEST_DIR}/skills.json" ]; then
-        # Verify ref is parsed correctly without the comment
-        if grep -q '"ref": "main"' "${TEST_DIR}/skills.json" && \
-           ! grep -q '# Optional' "${TEST_DIR}/skills.json"; then
-            assert_success "Should strip YAML comments from ref field"
-        else
-            echo "DEBUG: skills.json contents:"
-            cat "${TEST_DIR}/skills.json"
-            assert_failure "Should strip YAML comments from ref field"
-        fi
-        
-        # Verify path is parsed correctly without the comment
-        if grep -q '"path": "skills/"' "${TEST_DIR}/skills.json" && \
-           ! grep -q '# Optional' "${TEST_DIR}/skills.json"; then
-            assert_success "Should strip YAML comments from path field"
-        else
-            assert_failure "Should strip YAML comments from path field"
-        fi
-    else
-        assert_failure "skills.json should exist"
-    fi
-else
-    assert_failure "parse_skills_config should succeed"
-fi
-
-# Test 21: Validate Skill with supporting files
-print_test_header "Test 21: Validate Skill with supporting files"
+# Test 11: Validate Skill with supporting files
+print_test_header "Test 11: Validate Skill with supporting files"
 mkdir -p "${TEST_DIR}/skill-with-files/scripts"
 mkdir -p "${TEST_DIR}/skill-with-files/templates"
 cat > "${TEST_DIR}/skill-with-files/SKILL.md" <<'EOF'

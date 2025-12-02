@@ -56,14 +56,11 @@ claudeCode:
 
   # Skills Configuration
   # Skills extend Claude's capabilities with custom instructions and scripts
-  skills: []
-
-  # Example Skills configurations:
   #
-  # Skills bundled with your application:
+  # Bundled Skills:
   # - Place Skills in .claude/skills/ directory in your application
   # - Each Skill should be in its own subdirectory with a SKILL.md file
-  # - No configuration needed - Skills are automatically discovered
+  # - Skills are automatically discovered during staging
   #
   # Example bundled Skill structure:
   # .claude/
@@ -73,19 +70,5 @@ claudeCode:
   #       scripts/         # Optional: Supporting scripts
   #       templates/       # Optional: Templates
   #
-  # Skills from git repositories (cloned during staging):
-  # skills:
-  #   - name: team-workflow-skills
-  #     git:
-  #       url: https://github.com/your-org/team-skills.git
-  #       ref: main              # branch, tag, or commit (optional, default: default branch)
-  #       path: skills/          # subdirectory within repo (optional)
-  #
-  #   - name: security-review
-  #     git:
-  #       url: https://github.com/security-team/claude-skills.git
-  #       ref: v1.2.0            # pin to specific version tag
-  #
-  # Skills are cached between builds for faster deployments
   # Invalid Skills generate warnings but don't fail the build
 

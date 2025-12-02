@@ -445,244 +445,6 @@ configure_claude_code() {
 # Skills Configuration Functions
 # ============================================================================
 
-# Validate git URL for security
-# Only allows https:// URLs
-validate_git_url() {
-    local url=$1
-    
-    # Check if URL starts with https://
-    if [[ ! "${url}" =~ ^https:// ]]; then
-        echo "       ERROR: Invalid git URL scheme (only https:// allowed): ${url}" >&2
-        return 1
-    fi
-    
-    # Reject file:// and git:// protocols
-    if [[ "${url}" =~ ^(file://|git://) ]]; then
-        echo "       ERROR: Insecure git URL scheme: ${url}" >&2
-        return 1
-    fi
-    
-    return 0
-}
-
-# Parse Skills configuration from .claude-code-config.yml
-# Extracts git-based Skills definitions
-parse_skills_config() {
-    local config_file=$1
-    local output_file=$2
-    
-    if [ ! -f "${config_file}" ]; then
-        return 1
-    fi
-    
-    # Check if file has skills section
-    if ! grep -q "^\s*skills:" "${config_file}"; then
-        # No skills section - not an error, just means no git skills to install
-        return 1
-    fi
-    
-    # Use Python to parse the skills section
-    if command -v python3 > /dev/null 2>&1; then
-        python3 - "${config_file}" > "${output_file}" 2>&1 <<'PYTHON_SCRIPT'
-import sys
-import re
-import json
-
-if len(sys.argv) < 2:
-    sys.exit(1)
-
-config_file = sys.argv[1]
-
-try:
-    with open(config_file, 'r') as f:
-        lines = f.readlines()
-except Exception as e:
-    print(json.dumps([]), file=sys.stdout)
-    sys.exit(0)
-
-skills = []
-in_skills = False
-in_skill = False
-current_skill = None
-in_git = False
-current_git = None
-
-for line in lines:
-    stripped = line.strip()
-    
-    # Detect start of skills section
-    if re.match(r'skills:', stripped):
-        in_skills = True
-        continue
-    
-    # Exit skills section if we hit a non-indented, non-comment line
-    if in_skills and line and not line.startswith((' ', '\t', '-', '#')) and stripped:
-        in_skills = False
-        break
-    
-    # Detect start of new skill (list item with name)
-    if in_skills and re.match(r'-\s+name:', stripped):
-        # Save previous skill if it has git config
-        if current_skill and current_git:
-            current_skill['git'] = current_git
-            skills.append(current_skill)
-        
-        # Start new skill
-        match = re.search(r'name:\s*(.+)', stripped)
-        current_skill = {'name': match.group(1).strip()} if match else None
-        current_git = None
-        in_git = False
-        in_skill = True
-        continue
-    
-    # Parse skill properties
-    if in_skill and current_skill:
-        # Detect git section
-        if re.match(r'^\s+git:', line):
-            current_git = {}
-            in_git = True
-            continue
-        
-        # Parse git properties
-        if in_git and current_git is not None:
-            # URL
-            if re.match(r'^\s+url:', line):
-                match = re.search(r'url:\s*(.+)', stripped)
-                if match:
-                    url = match.group(1).strip().strip('"').strip("'")
-                    # Strip YAML comments (everything after #)
-                    url = url.split('#')[0].strip()
-                    current_git['url'] = url
-            
-            # Ref (branch, tag, or commit)
-            elif re.match(r'^\s+ref:', line):
-                match = re.search(r'ref:\s*(.+)', stripped)
-                if match:
-                    ref = match.group(1).strip().strip('"').strip("'")
-                    # Strip YAML comments (everything after #)
-                    ref = ref.split('#')[0].strip()
-                    current_git['ref'] = ref
-            
-            # Path (subdirectory within repo)
-            elif re.match(r'^\s+path:', line):
-                match = re.search(r'path:\s*(.+)', stripped)
-                if match:
-                    path = match.group(1).strip().strip('"').strip("'")
-                    # Strip YAML comments (everything after #)
-                    path = path.split('#')[0].strip()
-                    current_git['path'] = path
-
-# Add last skill
-if current_skill and current_git:
-    current_skill['git'] = current_git
-    skills.append(current_skill)
-
-# Output JSON array of skills
-print(json.dumps(skills, indent=2), file=sys.stdout)
-PYTHON_SCRIPT
-        
-        if [ $? -eq 0 ]; then
-            return 0
-        else
-            echo "[]" > "${output_file}"
-            return 1
-        fi
-    else
-        # Fallback: create empty array if Python not available
-        echo "[]" > "${output_file}"
-        echo "       WARNING: Python3 not available for YAML parsing, skipping Skills" >&2
-        return 1
-    fi
-}
-
-# Clone a git-based Skill
-# Handles caching and validation
-clone_git_skill() {
-    local skill_name=$1
-    local git_url=$2
-    local git_ref=$3
-    local git_path=$4
-    local cache_dir=$5
-    local target_dir=$6
-    
-    # Validate git URL
-    if ! validate_git_url "${git_url}"; then
-        return 1
-    fi
-    
-    # Create cache directory
-    local cache_key="${skill_name}::${git_url}::${git_ref}"
-    local cache_key_hash=$(echo -n "${cache_key}" | md5sum | awk '{print $1}' 2>/dev/null || echo -n "${cache_key}" | md5 2>/dev/null)
-    local skill_cache_dir="${cache_dir}/claude-skills/${cache_key_hash}"
-    
-    # Check if already cached
-    if [ -d "${skill_cache_dir}" ]; then
-        echo "       Using cached Skill: ${skill_name}"
-    else
-        echo "       Cloning Skill from git: ${skill_name}"
-        echo "       URL: ${git_url}"
-        if [ -n "${git_ref}" ]; then
-            echo "       Ref: ${git_ref}"
-        fi
-        
-        # Create cache directory
-        mkdir -p "${skill_cache_dir}"
-        
-        # Clone with timeout (60 seconds)
-        local clone_cmd="git clone --depth 1"
-        if [ -n "${git_ref}" ]; then
-            clone_cmd="${clone_cmd} --branch ${git_ref}"
-        fi
-        clone_cmd="${clone_cmd} ${git_url} ${skill_cache_dir}/repo"
-        
-        # Use timeout command if available
-        if command -v timeout > /dev/null 2>&1; then
-            if ! timeout 60 ${clone_cmd} 2>&1 | head -20; then
-                echo "       ERROR: Failed to clone Skill (timeout or error): ${skill_name}" >&2
-                rm -rf "${skill_cache_dir}"
-                return 1
-            fi
-        else
-            if ! ${clone_cmd} 2>&1 | head -20; then
-                echo "       ERROR: Failed to clone Skill: ${skill_name}" >&2
-                rm -rf "${skill_cache_dir}"
-                return 1
-            fi
-        fi
-        
-        # Check repository size (max 50MB)
-        local repo_size=$(du -sm "${skill_cache_dir}/repo" 2>/dev/null | awk '{print $1}')
-        if [ -n "${repo_size}" ] && [ "${repo_size}" -gt 50 ]; then
-            echo "       ERROR: Skill repository too large (${repo_size}MB > 50MB): ${skill_name}" >&2
-            rm -rf "${skill_cache_dir}"
-            return 1
-        fi
-    fi
-    
-    # Copy to target directory
-    local source_path="${skill_cache_dir}/repo"
-    if [ -n "${git_path}" ]; then
-        source_path="${source_path}/${git_path}"
-    fi
-    
-    if [ ! -d "${source_path}" ]; then
-        echo "       ERROR: Skill path not found in repository: ${git_path}" >&2
-        return 1
-    fi
-    
-    # Create target directory
-    mkdir -p "${target_dir}"
-    
-    # Copy Skill files
-    cp -r "${source_path}"/* "${target_dir}/" 2>/dev/null || {
-        echo "       ERROR: Failed to copy Skill files: ${skill_name}" >&2
-        return 1
-    }
-    
-    echo "       Installed Skill: ${skill_name}"
-    return 0
-}
-
 # Validate Skill structure
 # Verifies SKILL.md exists and has proper frontmatter
 validate_skill_structure() {
@@ -759,84 +521,17 @@ list_installed_skills() {
     return 0
 }
 
-# Install git-based Skills
-install_git_skills() {
-    local build_dir=$1
-    local cache_dir=$2
-    local skills_json=$3
-    
-    # Check if we have any git skills to install
-    if [ ! -f "${skills_json}" ]; then
-        return 0
-    fi
-    
-    # Parse JSON and install each Skill
-    if command -v python3 > /dev/null 2>&1; then
-        python3 - "${skills_json}" "${build_dir}" "${cache_dir}" <<'PYTHON_SCRIPT'
-import sys
-import json
-import subprocess
-import os
-
-if len(sys.argv) < 4:
-    sys.exit(1)
-
-skills_json_file = sys.argv[1]
-build_dir = sys.argv[2]
-cache_dir = sys.argv[3]
-
-try:
-    with open(skills_json_file, 'r') as f:
-        skills = json.load(f)
-except:
-    sys.exit(0)
-
-# Install each git-based Skill
-for skill in skills:
-    if 'git' not in skill:
-        continue
-    
-    name = skill.get('name', 'unknown')
-    git_config = skill['git']
-    url = git_config.get('url', '')
-    ref = git_config.get('ref', '')
-    path = git_config.get('path', '')
-    
-    if not url:
-        continue
-    
-    # Build target directory
-    target_dir = os.path.join(build_dir, '.claude', 'skills', name)
-    
-    # Call bash function to clone
-    cmd = [
-        'bash', '-c',
-        f'source {os.environ.get("BP_DIR", "")}/lib/claude_configurator.sh && ' +
-        f'clone_git_skill "{name}" "{url}" "{ref}" "{path}" "{cache_dir}" "{target_dir}"'
-    ]
-    
-    result = subprocess.run(cmd, capture_output=False)
-    if result.returncode != 0:
-        print(f"WARNING: Failed to install Skill: {name}", file=sys.stderr)
-
-sys.exit(0)
-PYTHON_SCRIPT
-    fi
-    
-    return 0
-}
-
 # Main Skills configuration function
 configure_skills() {
     local build_dir=$1
     local cache_dir=$2
-    
+
     echo "-----> Configuring Claude Skills"
-    
+
     # Create Skills directory
     local skills_dir="${build_dir}/.claude/skills"
     mkdir -p "${skills_dir}"
-    
+
     # Check for bundled Skills (already in .claude/skills/)
     local bundled_count=0
     if [ -d "${skills_dir}" ]; then
@@ -846,42 +541,18 @@ configure_skills() {
             fi
         done
     fi
-    
+
     if [ ${bundled_count} -gt 0 ]; then
         echo "       Found ${bundled_count} bundled Skill(s)"
+    else
+        echo "       No bundled Skills found"
     fi
-    
-    # Parse Skills configuration from .claude-code-config.yml
-    if [ -n "${CLAUDE_CODE_CONFIG_FILE}" ] && [ -f "${CLAUDE_CODE_CONFIG_FILE}" ]; then
-        local skills_json="${build_dir}/.claude-skills-config.json"
-        
-        if parse_skills_config "${CLAUDE_CODE_CONFIG_FILE}" "${skills_json}"; then
-            # Check if we have any git-based Skills
-            local git_skills_count=0
-            if [ -f "${skills_json}" ]; then
-                git_skills_count=$(grep -c '"git"' "${skills_json}" 2>/dev/null || echo "0")
-            fi
-            
-            if [ "${git_skills_count}" -gt 0 ]; then
-                echo "       Installing ${git_skills_count} git-based Skill(s)..."
-                
-                # Export BP_DIR for subprocess
-                export BP_DIR="${BP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-                
-                # Install git-based Skills
-                install_git_skills "${build_dir}" "${cache_dir}" "${skills_json}"
-            fi
-            
-            # Clean up temporary config file
-            rm -f "${skills_json}"
-        fi
-    fi
-    
+
     # Validate all Skills
     echo "       Validating Skills..."
     local valid_count=0
     local invalid_count=0
-    
+
     for skill_dir in "${skills_dir}"/*; do
         if [ -d "${skill_dir}" ]; then
             if validate_skill_structure "${skill_dir}"; then
@@ -891,15 +562,15 @@ configure_skills() {
             fi
         fi
     done
-    
+
     echo "       Valid Skills: ${valid_count}"
     if [ ${invalid_count} -gt 0 ]; then
         echo "       Invalid Skills: ${invalid_count} (see warnings above)"
     fi
-    
+
     # List installed Skills
     echo "       Installed Skills:"
     list_installed_skills "${skills_dir}"
-    
+
     return 0
 }
