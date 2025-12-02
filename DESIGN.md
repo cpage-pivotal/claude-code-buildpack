@@ -13,7 +13,7 @@ This document outlines the design and implementation plan for a Cloud Foundry bu
 | Phase 1: Core Buildpack | ✅ **Complete** | Detection, Node.js/CLI installation, environment setup, unit tests |
 | Phase 2: Configuration | ✅ **Complete** | MCP server configuration, `.claude.json` generation, YAML settings |
 | Phase 3: Java Integration | ✅ **Complete** | Java wrapper library, **true streaming**, Spring Boot integration, REST API, examples |
-| **Skills Support** | ✅ **Complete** | **Bundled & git-based Skills, YAML configuration, validation, caching** |
+| **Skills Support** | ✅ **Complete** | **Bundled Skills, validation** |
 | Phase 4: Production | ⏸ Planned | Security hardening, performance optimization, testing |
 | Phase 5: Release | ⏸ Planned | Final documentation, packaging, distribution |
 
@@ -33,7 +33,6 @@ This document outlines the design and implementation plan for a Cloud Foundry bu
 
 **Skills Support Deliverables (November 2025):**
 - ✅ Bundled Skills support (auto-discovery from `.claude/skills/`)
-- ✅ Git-based Skills with HTTPS cloning and caching
 - ✅ YAML configuration parsing with Python
 - ✅ SKILL.md validation (frontmatter, name, description)
 - ✅ Security restrictions (HTTPS only, timeouts, size limits)
@@ -65,7 +64,7 @@ This document outlines the design and implementation plan for a Cloud Foundry bu
 1. Bundle Claude Code CLI into Cloud Foundry containers during staging
 2. Configure Anthropic API authentication via application manifest
 3. Support MCP (Model Context Protocol) server configuration
-4. **Support Claude Skills (bundled and git-based)** ✅
+4. **Support Claude Skills (bundled)** ✅
 5. Enable Java applications to invoke and stream CLI output
 6. Maintain compatibility with existing Cloud Foundry Java buildpacks
 
@@ -173,9 +172,7 @@ The buildpack will:
 
 5. **Configure Claude Skills**
    - Preserve bundled Skills from `.claude/skills/` directory
-   - Clone git-based Skills from repositories (HTTPS only)
    - Validate SKILL.md structure and frontmatter
-   - Cache git Skills for faster subsequent builds
    - Generate validation warnings for invalid Skills
 
 6. **Create Configuration Files**
@@ -363,20 +360,7 @@ claudeCode:
         GITHUB_TOKEN: "${GITHUB_PERSONAL_ACCESS_TOKEN}"
 
   # Skills Configuration (NEW - November 2025)
-  skills:
-    # Git-based Skills (cloned during staging)
-    - name: team-workflow-skills
-      git:
-        url: https://github.com/your-org/team-skills.git
-        ref: main              # branch, tag, or commit (optional)
-        path: skills/          # subdirectory within repo (optional)
-        
-    - name: security-review
-      git:
-        url: https://github.com/security-team/claude-skills.git
-        ref: v1.2.0            # Pin to specific version
-    
-    # Bundled Skills in .claude/skills/ are automatically discovered
+  # Bundled Skills in .claude/skills/ are automatically discovered
 ```
 
 ### 5. Environment Variables
@@ -406,10 +390,9 @@ The buildpack supports Claude Skills, which are modular capabilities that extend
 
 ### Configuration
 
-Skills can be configured in two ways:
+Skills are bundled directly within your application:
 
-1. **Bundled Skills**: Place Skills directly in `.claude/skills/` within your application
-2. **Git-Based Skills**: Clone Skills from HTTPS git repositories during staging
+**Bundled Skills**: Place Skills directly in `.claude/skills/` within your application
 
 ### Bundled Skills
 
@@ -428,27 +411,6 @@ my-app/
 ```
 
 Bundled Skills are automatically discovered during staging—no configuration needed.
-
-### Git-Based Skills
-
-Configure git-based Skills in `.claude-code-config.yml`:
-
-```yaml
-claudeCode:
-  enabled: true
-  
-  skills:
-    - name: team-workflow-skills
-      git:
-        url: https://github.com/your-org/team-skills.git
-        ref: main              # branch, tag, or commit (optional)
-        path: skills/          # subdirectory within repo (optional)
-        
-    - name: security-review
-      git:
-        url: https://github.com/security-team/claude-skills.git
-        ref: v1.2.0            # Pin to specific version
-```
 
 ### SKILL.md Format
 
@@ -469,28 +431,16 @@ Provide clear, step-by-step guidance for Claude.
 Show concrete examples of using this Skill.
 ```
 
-### Security Restrictions
+### Validation
 
-- **HTTPS only**: Only `https://` URLs allowed (no `git://`, `file://`, or `http://`)
-- **Clone timeout**: 60 seconds maximum
-- **Repository size**: 50MB maximum per Skill
-- **Validation**: SKILL.md must have valid YAML frontmatter with `name` and `description` fields
-
-### Caching
-
-Git-based Skills are cached between builds:
-- **Cache key**: Hash of `${skill_name}::${git_url}::${ref}`
-- **Invalidation**: When URL, ref, or name changes
-- **Location**: `${CACHE_DIR}/claude-skills/`
+- **SKILL.md required**: Every Skill must have a `SKILL.md` file with valid YAML frontmatter
+- **Required fields**: `name` and `description` fields must be present in frontmatter
 
 ### Implementation
 
 **File:** `lib/claude_configurator.sh` (renamed from `mcp_configurator.sh`)
 
 **Functions:**
-- `validate_git_url()` - Security validation for git URLs
-- `parse_skills_config()` - Extract Skills configuration from YAML
-- `clone_git_skill()` - Clone git repository with caching
 - `validate_skill_structure()` - Verify SKILL.md format
 - `list_installed_skills()` - List discovered Skills
 - `configure_skills()` - Main Skills configuration orchestrator
@@ -1216,7 +1166,7 @@ claude-code-buildpack/
 │   │   ├── test_detect.sh              # 5 tests
 │   │   ├── test_validator.sh           # 11 tests
 │   │   ├── test_mcp_configurator.sh    # 26 tests (Phase 2)
-│   │   └── test_skills_configurator.sh # 20 tests (NEW - Skills Support)
+│   │   └── test_skills_configurator.sh # 11 tests (NEW - Skills Support)
 │   └── fixtures/
 ├── docs/
 │   ├── PHASE1_SUMMARY.md   # Phase 1 implementation notes
@@ -1228,11 +1178,11 @@ claude-code-buildpack/
 ├── LICENSE
 └── README.md
 
-**Total Test Coverage:** 62 unit tests, 100% passing ✓
+**Total Test Coverage:** 53 unit tests, 100% passing ✓
 - 5 detection tests
 - 11 validator tests
 - 26 MCP configurator tests
-- 20 Skills configurator tests (NEW)
+- 11 Skills configurator tests (NEW)
 ```
 
 ---
@@ -1493,12 +1443,9 @@ export NODE_EXTRA_CA_CERTS=/tmp/ca-bundle.crt
 
 ### Skills Support (✅ Completed - November 2025):
 - ✅ Bundled Skills auto-discovery from `.claude/skills/`
-- ✅ Git-based Skills with HTTPS cloning and caching
-- ✅ YAML configuration parsing (Python-based)
 - ✅ SKILL.md validation (frontmatter, name, description)
-- ✅ Security restrictions (HTTPS only, 60s timeout, 50MB max)
-- ✅ Intelligent caching between builds
-- ✅ 20 comprehensive unit tests (100% passing)
+- ✅ Security restrictions and validation
+- ✅ 11 comprehensive unit tests (100% passing)
 - ✅ Complete documentation (SKILLS.md, README updates)
 - ✅ Renamed `mcp_configurator.sh` to `claude_configurator.sh`
 
@@ -1601,10 +1548,10 @@ This buildpack enables seamless integration of Claude Code CLI into Cloud Foundr
 
 ### Key Achievements
 
-- ✅ 62 unit tests, 100% passing (Phases 1, 2, 3 & Skills)
+- ✅ 53 unit tests, 100% passing (Phases 1, 2, 3 & Skills)
 - ✅ Comprehensive MCP configuration support
 - ✅ Remote and local MCP server integration
-- ✅ **Claude Skills support (bundled & git-based)** 🎯
+- ✅ **Claude Skills support (bundled)** 🎯
 - ✅ Flexible YAML-based configuration
 - ✅ Production-ready Phases 1, 2, 3 & Skills implementation
 - ✅ Java wrapper library with Spring Boot integration
@@ -1615,7 +1562,7 @@ This buildpack enables seamless integration of Claude Code CLI into Cloud Foundr
 - ✅ Background timeout enforcement prevents runaway processes
 - ✅ Spring WebFlux integration with Flux.using() pattern
 - ✅ 10 comprehensive streaming usage examples
-- ✅ Skills validation, caching, and security
+- ✅ Skills validation and security
 - ✅ Comprehensive Skills documentation (SKILLS.md)
 
 ---

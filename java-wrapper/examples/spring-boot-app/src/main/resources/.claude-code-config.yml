@@ -12,9 +12,10 @@ claudeCode:
       type: sse
       url: "https://github-mcp-server.apps.tas-ndc.kuhn-labs.com/sse"
 
-  skills:
-    # Clone from git repository
-    - name: limerick-skill
-      git:
-        url: https://github.com/cpage-pivotal/limerick-skill.git
-        ref: main
+  # Skills Configuration
+  # Skills extend Claude's capabilities with custom instructions and scripts
+  #
+  # Bundled Skills:
+  # - Place Skills in .claude/skills/ directory in your application
+  # - Each Skill should be in its own subdirectory with a SKILL.md file
+  # - Skills are automatically discovered during staging
