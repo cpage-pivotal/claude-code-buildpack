@@ -18,6 +18,24 @@ claudeCode:
   # NOTE: API key is set via ANTHROPIC_API_KEY environment variable
   # Do NOT include an "authentication:" section - it's not needed and may cause confusion
 
+  # Plugin Marketplaces Configuration
+  # Configure team marketplaces to make plugins easily discoverable
+  # Marketplaces are automatically added to Claude Code CLI
+  marketplaces: []
+
+  # Example marketplace configurations:
+  #
+  # GitHub-hosted marketplace:
+  # marketplaces:
+  #   - name: team-tools
+  #     source: github
+  #     repo: your-org/claude-plugins
+  #
+  # Git-hosted marketplace:
+  #   - name: project-plugins
+  #     source: git
+  #     url: https://git.company.com/project-plugins.git
+
   # MCP (Model Context Protocol) Server Configuration
   # Configure additional capabilities for Claude Code CLI
   mcpServers:

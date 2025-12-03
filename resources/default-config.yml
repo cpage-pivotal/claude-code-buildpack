@@ -21,6 +21,10 @@ claudeCode:
     model: "sonnet"            # Default model: sonnet, opus, haiku
     outputFormat: "text"       # Output format: text, json
 
+  # Plugin Marketplaces
+  # Configure team marketplaces to make plugins discoverable
+  marketplaces: []
+
   # MCP (Model Context Protocol) Servers
   # Note: MCP configuration will be fully implemented in Phase 2
   mcpServers: []

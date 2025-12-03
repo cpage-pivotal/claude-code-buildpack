@@ -23,6 +23,11 @@ claudeCode:
     # This significantly improves performance for complex operations
     alwaysThinkingEnabled: true
 
+  # Plugin Marketplaces
+  # Configure team marketplaces to make plugins easily discoverable
+  # Marketplaces are added to ~/.claude/settings.json
+  marketplaces: []
+
   # MCP (Model Context Protocol) Servers
   # Configure MCP servers to extend Claude Code capabilities
   mcpServers: []

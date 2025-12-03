@@ -292,6 +292,61 @@ claudeCode:
 **Why This Matters in Cloud Foundry:**
 Multi-step operations (e.g., "Review issue #33 AND add a comment") can timeout without extended thinking mode. In testing, operations that completed in <30 seconds locally with this setting enabled would timeout after 3 minutes in CF without it. The buildpack sets this to `true` by default to optimize performance in Cloud Foundry environments.
 
+#### Plugin Marketplaces (extraKnownMarketplaces)
+
+**Purpose:** Configure team plugin marketplaces for easy plugin discovery and distribution across the organization.
+
+**Behavior:**
+- Marketplaces are automatically added to `~/.claude/settings.json` during buildpack staging
+- Team members get automatic access to configured marketplaces
+- Supports both GitHub-hosted and git-hosted marketplaces
+- Users can discover and install plugins using `/plugin` commands
+
+**Configuration:**
+```yaml
+claudeCode:
+  marketplaces:
+    # GitHub-hosted marketplace
+    - name: team-tools
+      source: github
+      repo: your-org/claude-plugins
+
+    # Git-hosted marketplace
+    - name: project-plugins
+      source: git
+      url: https://git.company.com/project-plugins.git
+```
+
+**Generated settings.json:**
+```json
+{
+  "alwaysThinkingEnabled": true,
+  "extraKnownMarketplaces": {
+    "team-tools": {
+      "source": {
+        "source": "github",
+        "repo": "your-org/claude-plugins"
+      }
+    },
+    "project-plugins": {
+      "source": {
+        "source": "git",
+        "url": "https://git.company.com/project-plugins.git"
+      }
+    }
+  }
+}
+```
+
+**Marketplace Sources:**
+- **GitHub:** Use `source: github` and `repo: org/repo-name` for GitHub or GitHub Enterprise repositories
+- **Git:** Use `source: git` and `url: https://...` for any git hosting service (GitLab, Bitbucket, etc.)
+
+**Team Governance:**
+- Maintain a curated `.claude-plugin/marketplace.json` in your repository
+- Add new plugins via PRs with security review
+- Only accept plugins that meet your security standards
+
 ### 3. Application Manifest Configuration
 
 **Note:** Cloud Foundry does not make `manifest.yml` available during staging, so MCP configuration in the manifest is not supported. Use `.claude-code-config.yml` instead.

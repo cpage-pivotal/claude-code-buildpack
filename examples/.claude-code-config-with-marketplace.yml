@@ -1,0 +1,49 @@
+# Example Claude Code Configuration with Plugin Marketplaces
+# This example demonstrates how to configure team plugin marketplaces
+
+claudeCode:
+  enabled: true
+  version: "latest"
+  logLevel: info
+  model: sonnet
+
+  # Claude Settings
+  settings:
+    alwaysThinkingEnabled: true
+
+  # Plugin Marketplaces Configuration
+  # Configure team marketplaces to make plugins easily discoverable
+  # Team members will automatically have access to these marketplaces
+  marketplaces:
+    # GitHub-hosted marketplace
+    - name: team-tools
+      source: github
+      repo: your-org/claude-plugins
+
+    # Git-hosted marketplace (using any git hosting service)
+    - name: project-plugins
+      source: git
+      url: https://git.company.com/project-plugins.git
+
+    # Another GitHub-hosted marketplace
+    - name: enterprise-tools
+      source: github
+      repo: enterprise-org/internal-claude-marketplace
+
+  # MCP Server Configuration
+  mcpServers:
+    - name: filesystem
+      type: stdio
+      command: npx
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-filesystem"
+      env:
+        ALLOWED_DIRECTORIES: "/home/vcap/app,/tmp"
+
+# Notes:
+# 1. Marketplaces are automatically added to ~/.claude/settings.json during staging
+# 2. Team members can discover and install plugins from these marketplaces
+# 3. Use GitHub marketplaces for public/GitHub Enterprise repos
+# 4. Use git marketplaces for any other git hosting service
+# 5. For governance, maintain a curated .claude-plugin/marketplace.json in your repo

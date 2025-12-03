@@ -322,50 +322,160 @@ EOF
 }
 
 # Generate .claude/settings.json from configuration
-# This creates Claude Code settings like alwaysThinkingEnabled
+# This creates Claude Code settings like alwaysThinkingEnabled and extraKnownMarketplaces
 generate_claude_settings_json() {
     local build_dir=$1
     local settings_dir="${build_dir}/.claude"
     local settings_file="${settings_dir}/settings.json"
-    
+
     # Create .claude directory if it doesn't exist
     mkdir -p "${settings_dir}"
-    
+
     echo "-----> Generating Claude settings configuration"
-    
-    # Check if config file specifies settings
+
+    # Use Python to parse YAML and generate JSON with marketplace support
     if [ -n "${CLAUDE_CODE_CONFIG_FILE}" ] && [ -f "${CLAUDE_CODE_CONFIG_FILE}" ]; then
-        # Check if settings section exists
-        if grep -q "^\s*settings:" "${CLAUDE_CODE_CONFIG_FILE}"; then
-            # Parse alwaysThinkingEnabled setting
-            local always_thinking=$(grep -A 5 "^\s*settings:" "${CLAUDE_CODE_CONFIG_FILE}" | \
-                                   grep "alwaysThinkingEnabled:" | \
-                                   awk -F": " '{print $2}' | \
-                                   tr -d ' "' | \
-                                   head -1)
-            
-            if [ -n "${always_thinking}" ]; then
-                echo "       Configuring alwaysThinkingEnabled: ${always_thinking}"
-                cat > "${settings_file}" <<EOF
-{
-  "alwaysThinkingEnabled": ${always_thinking}
-}
-EOF
-                echo "       Created ${settings_file}"
-                return 0
+        if command -v python3 > /dev/null 2>&1; then
+            # Run Python parser to generate settings JSON
+            python3 - "${CLAUDE_CODE_CONFIG_FILE}" > "${settings_file}" <<'PYTHON_SCRIPT'
+import sys
+import re
+import json
+
+if len(sys.argv) < 2:
+    sys.exit(1)
+
+config_file = sys.argv[1]
+
+try:
+    with open(config_file, 'r') as f:
+        lines = f.readlines()
+except Exception as e:
+    print(json.dumps({"alwaysThinkingEnabled": True}))
+    sys.exit(0)
+
+settings = {}
+marketplaces = {}
+in_settings = False
+in_marketplaces = False
+current_marketplace = None
+
+for line in lines:
+    stripped = line.strip()
+
+    # Detect settings section
+    if re.match(r'^\s*settings:', stripped):
+        in_settings = True
+        in_marketplaces = False
+        current_marketplace = None
+        continue
+
+    # Detect marketplaces section
+    if re.match(r'^\s*marketplaces:', stripped):
+        in_marketplaces = True
+        in_settings = False
+        current_marketplace = None
+        continue
+
+    # Exit sections when we hit other top-level keys (including mcpServers)
+    if re.match(r'^\s*(mcpServers|mcp-servers):', stripped):
+        in_settings = False
+        in_marketplaces = False
+        current_marketplace = None
+        continue
+
+    # Exit sections when we hit other non-indented keys
+    if line and not line.startswith((' ', '\t')) and stripped and not stripped.startswith('#'):
+        if not re.match(r'^\s*(settings|marketplaces|claudeCode):', stripped):
+            in_settings = False
+            in_marketplaces = False
+            current_marketplace = None
+
+    # Parse settings section
+    if in_settings and re.match(r'^\s+alwaysThinkingEnabled:', line):
+        match = re.search(r'alwaysThinkingEnabled:\s*(true|false)', stripped)
+        if match:
+            settings['alwaysThinkingEnabled'] = match.group(1) == 'true'
+
+    # Parse marketplaces section
+    if in_marketplaces:
+        # Detect start of new marketplace entry
+        if re.match(r'^\s+-\s+name:', line):
+            match = re.search(r'name:\s*(.+)', stripped)
+            if match:
+                current_marketplace = match.group(1).strip()
+                marketplaces[current_marketplace] = {"source": {}}
+
+        # Parse marketplace properties
+        elif current_marketplace:
+            # Parse source type (github or git)
+            if re.match(r'^\s+source:', line):
+                match = re.search(r'source:\s*(.+)', stripped)
+                if match:
+                    source_type = match.group(1).strip()
+                    marketplaces[current_marketplace]['source']['source'] = source_type
+
+            # Parse repo (for github)
+            elif re.match(r'^\s+repo:', line):
+                match = re.search(r'repo:\s*(.+)', stripped)
+                if match:
+                    repo = match.group(1).strip()
+                    marketplaces[current_marketplace]['source']['repo'] = repo
+
+            # Parse url (for git)
+            elif re.match(r'^\s+url:', line):
+                match = re.search(r'url:\s*(.+)', stripped)
+                if match:
+                    url = match.group(1).strip()
+                    marketplaces[current_marketplace]['source']['url'] = url
+
+# Build final settings object
+output = {}
+
+# Add alwaysThinkingEnabled (default to true if not specified)
+output['alwaysThinkingEnabled'] = settings.get('alwaysThinkingEnabled', True)
+
+# Add marketplaces if any were configured
+if marketplaces:
+    output['extraKnownMarketplaces'] = marketplaces
+
+print(json.dumps(output, indent=2))
+PYTHON_SCRIPT
+
+            if [ -f "${settings_file}" ]; then
+                # Validate generated JSON
+                if grep -q '"alwaysThinkingEnabled"' "${settings_file}"; then
+                    echo "       Created ${settings_file} with configuration from YAML"
+
+                    # Report marketplace configuration (count using Python for accuracy)
+                    if grep -q 'extraKnownMarketplaces' "${settings_file}"; then
+                        local marketplace_count=$(python3 -c "
+import json, sys
+try:
+    with open('${settings_file}', 'r') as f:
+        data = json.load(f)
+    print(len(data.get('extraKnownMarketplaces', {})))
+except:
+    print(0)
+" 2>/dev/null)
+                        if [ -n "${marketplace_count}" ] && [ "${marketplace_count}" -gt 0 ]; then
+                            echo "       Configured ${marketplace_count} plugin marketplace(s)"
+                        fi
+                    fi
+                    return 0
+                fi
             fi
         fi
     fi
-    
-    # If no settings specified, create default with alwaysThinkingEnabled: true
-    # This improves multi-step operation performance in Cloud Foundry
+
+    # Fallback: create default settings if Python parsing failed
     echo "       Using default settings with extended thinking enabled"
     cat > "${settings_file}" <<'EOF'
 {
   "alwaysThinkingEnabled": true
 }
 EOF
-    
+
     echo "       Created ${settings_file} with default configuration"
     return 0
 }

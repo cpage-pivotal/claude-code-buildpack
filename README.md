@@ -357,6 +357,62 @@ Without these, your process will hang or timeout!
     └── config.yml              # Buildpack configuration
 ```
 
+## Plugin Marketplaces
+
+Claude Code supports plugin marketplaces that allow teams to share and discover plugins across their organization. The buildpack can automatically configure team marketplaces during staging.
+
+### Configuring Team Marketplaces
+
+Add a `marketplaces` section to your `.claude-code-config.yml`:
+
+```yaml
+claudeCode:
+  enabled: true
+
+  # Plugin Marketplaces Configuration
+  marketplaces:
+    # GitHub-hosted marketplace
+    - name: team-tools
+      source: github
+      repo: your-org/claude-plugins
+
+    # Git-hosted marketplace (any git hosting service)
+    - name: project-plugins
+      source: git
+      url: https://git.company.com/project-plugins.git
+```
+
+### Marketplace Sources
+
+**GitHub Source:**
+- Use for public GitHub repositories or GitHub Enterprise
+- Requires `source: github` and `repo: org/repo-name`
+- Example: `your-org/claude-plugins`
+
+**Git Source:**
+- Use for any git hosting service (GitLab, Bitbucket, etc.)
+- Requires `source: git` and `url: https://...`
+- Example: `https://git.company.com/project-plugins.git`
+
+### How It Works
+
+1. During buildpack staging, the marketplace configuration is written to `~/.claude/settings.json`
+2. The settings file includes an `extraKnownMarketplaces` section with your team's marketplaces
+3. Team members automatically have access to these marketplaces when using Claude Code
+4. Users can discover and install plugins from these marketplaces using `/plugin` commands
+
+### Governance Best Practices
+
+For team governance:
+- Maintain a curated `.claude-plugin/marketplace.json` in your repository
+- Add new plugins via pull requests with security review
+- Only accept plugins that meet your team's security standards
+- Document plugin approval process in your team's workflow
+
+### Example with Complete Configuration
+
+See [examples/.claude-code-config-with-marketplace.yml](examples/.claude-code-config-with-marketplace.yml) for a complete example with marketplaces, MCP servers, and settings.
+
 ## MCP (Model Context Protocol) Server Configuration
 
 Claude Code supports MCP servers to extend its capabilities with additional tools and integrations. The buildpack automatically generates a `.claude.json` configuration file from your `.claude-code-config.yml`.
