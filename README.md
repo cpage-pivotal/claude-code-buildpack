@@ -12,6 +12,7 @@ This buildpack installs the Claude Code CLI and Node.js runtime into your Cloud 
 - 🔐 Secure API key management via environment variables
 - 🔌 MCP (Model Context Protocol) server support ✅
 - 🎯 Skills configuration (bundled and git-based) ✅
+- 🛡️ Deny lists for restricting capabilities (tool, file, MCP restrictions) ✅
 - ☕ Java wrapper library for easy integration ✅
 - 📦 Public Maven repository (GCP Artifact Registry) ✅
 - 📡 Real-time streaming output support
@@ -153,6 +154,124 @@ claudeCode:
 **Setting Priority:** Configuration file values take precedence over environment variables, which take precedence over defaults.
 
 **Note on Performance:** The `alwaysThinkingEnabled: true` setting is crucial for complex multi-step operations in Cloud Foundry. Without it, operations that complete in <30 seconds locally may timeout after 3 minutes. The buildpack sets this to `true` by default to optimize performance.
+
+### Deny Lists - Restricting Claude Code Capabilities
+
+The buildpack supports deny lists to restrict Claude Code's capabilities for security and compliance. Deny lists allow you to block specific tools, commands, file access, and MCP operations.
+
+#### Configuration
+
+Add deny rules to your `.claude-code-config.yml`:
+
+```yaml
+claudeCode:
+  enabled: true
+
+  settings:
+    alwaysThinkingEnabled: true
+
+    # Permission-based deny lists
+    permissions:
+      deny:
+        # Block shell commands
+        - "Bash(curl:*)"              # Block all curl commands
+        - "Bash(npm run deploy)"      # Block specific npm script
+
+        # Block file access
+        - "Read(./.env)"              # Block reading .env file
+        - "Read(./secrets/**)"        # Block entire secrets directory
+        - "Edit(./*.config.js)"       # Block editing config files
+
+        # Block entire tool categories
+        - "WebFetch"                  # Block all web requests
+
+        # Block specific MCP tools
+        - "mcp__github__create_issue"        # Block GitHub issue creation
+        - "mcp__github__delete_repository"   # Block repo deletion
+        - "mcp__filesystem__write_file"      # Block file writes
+```
+
+#### Supported Deny Patterns
+
+**1. Shell Command Restrictions (Prefix Matching)**
+```yaml
+- "Bash(curl:*)"          # Blocks any curl command
+- "Bash(rm -rf:*)"        # Blocks destructive operations
+- "Bash(npm run deploy)"  # Blocks specific npm script
+```
+
+**2. File Access Restrictions (Glob Patterns)**
+```yaml
+- "Read(./.env)"          # Block specific file
+- "Read(./.env.*)"        # Block pattern-matched files
+- "Read(./secrets/**)"    # Block entire directory
+- "Edit(./*.config.js)"   # Block editing config files
+- "Write(./production/**)" # Block writes to directory
+```
+
+**3. Tool Category Restrictions**
+```yaml
+- "WebFetch"              # Block all web requests
+- "Edit"                  # Block all file modifications
+- "Bash"                  # Block all shell commands (use carefully!)
+```
+
+**4. MCP Tool-Level Restrictions**
+
+Block individual tools from MCP servers using the `mcp__<server>__<tool>` syntax:
+
+```yaml
+# GitHub MCP Server - Allow read-only, block write operations
+- "mcp__github__create_issue"
+- "mcp__github__create_pull_request"
+- "mcp__github__delete_repository"
+
+# Filesystem MCP Server - Block write operations
+- "mcp__filesystem__write_file"
+- "mcp__filesystem__delete_file"
+
+# Custom MCP Server - Block dangerous operations
+- "mcp__database__drop_table"
+- "mcp__database__truncate"
+```
+
+**Note:** To find available MCP tool names, run `claude mcp list` in your application container.
+
+#### How Deny Lists Work
+
+1. **Highest Precedence**: Deny rules override any allow or ask rules
+2. **Pattern Matching**:
+   - Bash commands use prefix matching (can be bypassed with creative syntax)
+   - File paths support glob patterns (`*`, `**`)
+3. **Context Consumption**: Denied MCP tools still consume context tokens (they're loaded but blocked from executing)
+4. **Server-Level Control**: To completely block an MCP server, simply omit it from `mcpServers` configuration
+
+#### Security Best Practices
+
+1. **Principle of Least Privilege**: Start restrictive, only allow what's necessary
+2. **Block Sensitive Files**: Always block `.env`, credentials, and secret files
+3. **Restrict Write Operations**: Block file modifications in production environments
+4. **Network Control**: Consider blocking `WebFetch` for isolated environments
+5. **MCP Restrictions**: Block write/delete operations from MCP servers in production
+
+#### Example: Production-Ready Configuration
+
+See [`examples/.claude-code-config-with-deny-lists.yml`](examples/.claude-code-config-with-deny-lists.yml) for a comprehensive example with:
+- Shell command restrictions
+- File access controls
+- MCP tool-level denials
+- Security best practices
+- Detailed usage notes
+
+#### Important Limitations
+
+1. **Bash Prefix Matching**: Bash deny patterns use prefix matching and may be bypassed with creative command construction
+2. **Context Tokens**: Denied MCP tools still consume context tokens (loaded but not executable)
+3. **No Real-Time Updates**: Deny lists are applied at deployment time, not runtime
+
+For complete deny list examples and security recommendations, see:
+- [`examples/.claude-code-config-with-deny-lists.yml`](examples/.claude-code-config-with-deny-lists.yml) - Comprehensive deny list example
+- [Claude Code IAM Documentation](https://code.claude.com/docs/en/iam) - Official deny list documentation
 
 ### Environment Variables
 

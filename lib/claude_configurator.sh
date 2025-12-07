@@ -321,42 +321,166 @@ EOF
     return 0
 }
 
+# Parse settings section from YAML configuration
+# Extracts alwaysThinkingEnabled and permissions.deny array
+parse_settings_from_yaml() {
+    local config_file=$1
+    local output_file=$2
+
+    if [ ! -f "${config_file}" ]; then
+        return 1
+    fi
+
+    # Check if settings section exists
+    if ! grep -q "^\s*settings:" "${config_file}"; then
+        return 1
+    fi
+
+    # Use Python for YAML parsing
+    if command -v python3 > /dev/null 2>&1; then
+        python3 - "${config_file}" > "${output_file}" 2>&1 <<'PYTHON_SCRIPT'
+import sys
+import re
+import json
+
+if len(sys.argv) < 2:
+    sys.exit(1)
+
+config_file = sys.argv[1]
+
+try:
+    with open(config_file, 'r') as f:
+        lines = f.readlines()
+except Exception as e:
+    # Return default settings
+    print(json.dumps({"alwaysThinkingEnabled": True}), file=sys.stdout)
+    sys.exit(0)
+
+settings = {
+    "alwaysThinkingEnabled": True  # Default value
+}
+in_settings = False
+in_permissions = False
+in_deny = False
+deny_list = []
+
+for i, line in enumerate(lines):
+    stripped = line.strip()
+
+    # Detect start of settings section
+    if re.match(r'settings:', stripped):
+        in_settings = True
+        continue
+
+    # Exit settings section if we hit a non-indented, non-comment line
+    if in_settings and line and not line.startswith((' ', '\t', '-', '#')) and stripped:
+        in_settings = False
+        break
+
+    if in_settings:
+        # Parse alwaysThinkingEnabled
+        if re.match(r'alwaysThinkingEnabled:', stripped):
+            match = re.search(r'alwaysThinkingEnabled:\s*(true|false)', stripped)
+            if match:
+                settings['alwaysThinkingEnabled'] = match.group(1) == 'true'
+
+        # Detect permissions section
+        if re.match(r'permissions:', stripped):
+            in_permissions = True
+            continue
+
+        # Detect deny array within permissions
+        if in_permissions and re.match(r'deny:', stripped):
+            in_deny = True
+            continue
+
+        # Parse deny list items
+        if in_deny and re.match(r'-\s+', stripped):
+            # Extract the deny item, handling quotes and comments
+            # Format: - "item" # comment  OR  - item # comment
+            match = re.search(r'-\s+(["\']?)(.+?)\1(?:\s*#.*)?$', stripped)
+            if match:
+                deny_item = match.group(2).strip()
+                # Remove any trailing comments that weren't caught by regex
+                if '#' in deny_item and not deny_item.startswith('#'):
+                    # Find the last quote (if any) before the comment
+                    quote_pos = max(deny_item.rfind('"'), deny_item.rfind("'"))
+                    hash_pos = deny_item.find('#')
+                    # Only strip comment if it's after any quotes
+                    if hash_pos > quote_pos:
+                        deny_item = deny_item[:hash_pos].strip()
+                deny_list.append(deny_item)
+
+        # Exit deny section if we hit a non-list-item line
+        if in_deny and not re.match(r'-\s+', stripped) and stripped and not stripped.startswith('#'):
+            in_deny = False
+
+# Add permissions.deny to settings if we found deny rules
+if deny_list:
+    settings['permissions'] = {
+        'deny': deny_list
+    }
+
+# Output JSON
+print(json.dumps(settings, indent=2), file=sys.stdout)
+PYTHON_SCRIPT
+
+        if [ $? -eq 0 ]; then
+            return 0
+        else
+            return 1
+        fi
+    else
+        # Fallback: create default settings if Python not available
+        echo '{"alwaysThinkingEnabled": true}' > "${output_file}"
+        return 1
+    fi
+}
+
 # Generate .claude/settings.json from configuration
-# This creates Claude Code settings like alwaysThinkingEnabled
+# This creates Claude Code settings like alwaysThinkingEnabled and permissions.deny
 generate_claude_settings_json() {
     local build_dir=$1
     local settings_dir="${build_dir}/.claude"
     local settings_file="${settings_dir}/settings.json"
-    
+
     # Create .claude directory if it doesn't exist
     mkdir -p "${settings_dir}"
-    
+
     echo "-----> Generating Claude settings configuration"
-    
+
     # Check if config file specifies settings
     if [ -n "${CLAUDE_CODE_CONFIG_FILE}" ] && [ -f "${CLAUDE_CODE_CONFIG_FILE}" ]; then
         # Check if settings section exists
         if grep -q "^\s*settings:" "${CLAUDE_CODE_CONFIG_FILE}"; then
-            # Parse alwaysThinkingEnabled setting
-            local always_thinking=$(grep -A 5 "^\s*settings:" "${CLAUDE_CODE_CONFIG_FILE}" | \
-                                   grep "alwaysThinkingEnabled:" | \
-                                   awk -F": " '{print $2}' | \
-                                   tr -d ' "' | \
-                                   head -1)
-            
-            if [ -n "${always_thinking}" ]; then
-                echo "       Configuring alwaysThinkingEnabled: ${always_thinking}"
-                cat > "${settings_file}" <<EOF
-{
-  "alwaysThinkingEnabled": ${always_thinking}
-}
-EOF
-                echo "       Created ${settings_file}"
-                return 0
+            echo "       Parsing settings from configuration file..."
+
+            # Parse settings using Python
+            local temp_settings="${build_dir}/.claude-settings-temp.json"
+            if parse_settings_from_yaml "${CLAUDE_CODE_CONFIG_FILE}" "${temp_settings}"; then
+                # Check if we got valid JSON
+                if [ -f "${temp_settings}" ] && grep -q '"alwaysThinkingEnabled"' "${temp_settings}"; then
+                    mv "${temp_settings}" "${settings_file}"
+                    echo "       Created ${settings_file} from configuration"
+
+                    # Log what was configured
+                    if grep -q '"permissions"' "${settings_file}"; then
+                        # Use Python to accurately count deny rules
+                        local deny_count=$(python3 -c "import json; data=json.load(open('${settings_file}')); print(len(data.get('permissions', {}).get('deny', [])))" 2>/dev/null || echo "0")
+                        if [ "${deny_count}" -gt 0 ]; then
+                            echo "       Configured ${deny_count} deny rule(s)"
+                        fi
+                    fi
+
+                    return 0
+                fi
             fi
+
+            # Clean up temp file if it exists
+            rm -f "${temp_settings}"
         fi
     fi
-    
+
     # If no settings specified, create default with alwaysThinkingEnabled: true
     # This improves multi-step operation performance in Cloud Foundry
     echo "       Using default settings with extended thinking enabled"
@@ -365,7 +489,7 @@ EOF
   "alwaysThinkingEnabled": true
 }
 EOF
-    
+
     echo "       Created ${settings_file} with default configuration"
     return 0
 }

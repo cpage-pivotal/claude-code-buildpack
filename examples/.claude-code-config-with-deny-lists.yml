@@ -1,0 +1,165 @@
+# Example .claude-code-config.yml with Deny Lists
+#
+# This example demonstrates how to configure deny lists to restrict Claude Code's
+# capabilities in your Cloud Foundry application.
+#
+# Deny lists support two types of restrictions:
+# 1. Permission-based denials - Block specific tools and operations
+# 2. MCP tool-level denials - Block individual tools from MCP servers
+#
+# Place this file in:
+# - Application root: .claude-code-config.yml
+# - Spring Boot: src/main/resources/.claude-code-config.yml
+
+claudeCode:
+  enabled: true
+
+  # Optional: Logging configuration
+  logLevel: info  # Options: debug, info, warn, error
+
+  # Claude settings (written to ~/.claude/settings.json)
+  settings:
+    # Enable extended thinking for multi-step operations
+    alwaysThinkingEnabled: true
+
+    # Permission-based deny lists
+    permissions:
+      deny:
+        # ============================================================
+        # Shell Command Restrictions
+        # ============================================================
+        # Block specific commands using prefix matching
+        - "Bash(curl:*)"            # Block all curl commands
+        - "Bash(wget:*)"            # Block all wget commands
+        - "Bash(npm run deploy)"    # Block specific npm script
+        - "Bash(rm -rf:*)"          # Block destructive operations
+
+        # ============================================================
+        # File Access Restrictions
+        # ============================================================
+        # Block reading sensitive files
+        - "Read(./.env)"            # Block .env file
+        - "Read(./.env.*)"          # Block .env.* files
+        - "Read(./secrets/**)"      # Block entire secrets directory
+        - "Read(./config/credentials.yml)"  # Block specific config
+
+        # Block file modifications
+        - "Edit(./*.config.js)"     # Block editing config files
+        - "Write(./production/**)"  # Block writes to production dir
+
+        # ============================================================
+        # Tool Category Restrictions
+        # ============================================================
+        # Block entire tool categories
+        - "WebFetch"                # Block all web requests
+
+        # ============================================================
+        # MCP Tool-Level Restrictions
+        # ============================================================
+        # Block specific tools from MCP servers using mcp__server__tool syntax
+
+        # GitHub MCP Server - Allow read-only, block write operations
+        - "mcp__github__create_issue"
+        - "mcp__github__create_pull_request"
+        - "mcp__github__update_issue"
+        - "mcp__github__delete_issue"
+        - "mcp__github__create_repository"
+        - "mcp__github__delete_repository"
+
+        # Filesystem MCP Server - Block write and delete operations
+        - "mcp__filesystem__write_file"
+        - "mcp__filesystem__delete_file"
+        - "mcp__filesystem__move_file"
+
+        # Custom MCP Server - Block dangerous operations
+        - "mcp__database__drop_table"
+        - "mcp__database__truncate"
+
+  # MCP Servers Configuration
+  # Note: To block an entire MCP server, simply omit it from this list
+  mcpServers:
+    # GitHub MCP Server - Restricted to read-only operations via deny list above
+    - name: github
+      type: stdio
+      command: npx
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-github"
+      env:
+        GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
+
+    # Filesystem MCP Server - Restricted to read operations via deny list above
+    - name: filesystem
+      type: stdio
+      command: npx
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-filesystem"
+      env:
+        ALLOWED_DIRECTORIES: "/home/vcap/app,/tmp"
+
+# ============================================================
+# Usage Notes
+# ============================================================
+#
+# 1. Deny Rule Precedence:
+#    - Deny rules have the highest precedence
+#    - They override any allow or ask rules
+#
+# 2. Pattern Matching:
+#    - Bash patterns use prefix matching
+#    - File paths support glob patterns (*, **)
+#    - Example: "Read(./secrets/**)" blocks all files in secrets/
+#
+# 3. MCP Tool Syntax:
+#    - Format: "mcp__<server>__<tool>"
+#    - Example: "mcp__github__create_issue"
+#    - Find tool names: Run `claude mcp list` in your app
+#
+# 4. Important Limitation:
+#    - Denied MCP tools still consume context tokens
+#    - They're blocked from executing but loaded into context
+#    - For context optimization, omit entire servers from mcpServers
+#
+# 5. Testing Deny Lists:
+#    - Deploy your app with this configuration
+#    - SSH into the container: cf ssh <app-name>
+#    - Check settings: cat ~/.claude/settings.json
+#    - Test restrictions: Try blocked commands via your app
+#
+# 6. Environment Variables:
+#    Set in your Cloud Foundry manifest.yml:
+#
+#    env:
+#      ANTHROPIC_API_KEY: sk-ant-xxxxxxxxxxxxx
+#      GITHUB_TOKEN: ghp_xxxxxxxxxxxxx
+#      CLAUDE_CODE_ENABLED: true
+#
+# ============================================================
+# Security Best Practices
+# ============================================================
+#
+# 1. Principle of Least Privilege:
+#    - Start with restrictive deny lists
+#    - Only allow what's necessary
+#
+# 2. Block Sensitive File Access:
+#    - Always block .env files
+#    - Block credential and secret files
+#    - Block production configuration
+#
+# 3. Restrict Network Access:
+#    - Consider blocking WebFetch for isolated environments
+#    - Use Cloud Foundry security groups for network control
+#
+# 4. MCP Server Restrictions:
+#    - Block write operations in production
+#    - Restrict database modifications
+#    - Use read-only MCP tools when possible
+#
+# 5. Regular Audits:
+#    - Review deny lists periodically
+#    - Update based on new security requirements
+#    - Document why each rule exists
+#
+# ============================================================
