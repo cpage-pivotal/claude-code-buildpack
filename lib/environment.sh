@@ -28,6 +28,24 @@ export CLAUDE_CLI_PATH="\$DEPS_DIR/${index}/bin/claude"
 # Set home directory for Claude configuration
 export CLAUDE_CONFIG_HOME="\$HOME"
 
+# Copy Claude settings from app directory to HOME directory at runtime
+# Claude Code CLI looks for settings at ~/.claude/settings.json
+# but the buildpack creates them at /home/vcap/app/.claude/
+if [ -d "/home/vcap/app/.claude" ] && [ "\$HOME" != "/home/vcap/app" ]; then
+    # Create .claude directory in HOME if it doesn't exist
+    mkdir -p "\$HOME/.claude"
+
+    # Copy settings.json if it exists in app directory
+    if [ -f "/home/vcap/app/.claude/settings.json" ]; then
+        cp "/home/vcap/app/.claude/settings.json" "\$HOME/.claude/settings.json"
+    fi
+
+    # Copy .claude.json (MCP config) if it exists in app directory
+    if [ -f "/home/vcap/app/.claude.json" ]; then
+        cp "/home/vcap/app/.claude.json" "\$HOME/.claude.json"
+    fi
+fi
+
 # Log level configuration (from config file or default)
 # Priority: config file > environment variable > default
 if [ -z "\$CLAUDE_CODE_LOG_LEVEL" ]; then
