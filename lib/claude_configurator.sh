@@ -465,10 +465,10 @@ generate_claude_settings_json() {
 
                     # Log what was configured
                     if grep -q '"permissions"' "${settings_file}"; then
-                        local deny_count=$(grep -o '"deny"' "${settings_file}" | wc -l)
+                        # Use Python to accurately count deny rules
+                        local deny_count=$(python3 -c "import json; data=json.load(open('${settings_file}')); print(len(data.get('permissions', {}).get('deny', [])))" 2>/dev/null || echo "0")
                         if [ "${deny_count}" -gt 0 ]; then
-                            local items=$(grep -A 100 '"deny"' "${settings_file}" | grep -c '^\s*"')
-                            echo "       Configured ${items} deny rule(s)"
+                            echo "       Configured ${deny_count} deny rule(s)"
                         fi
                     fi
 
