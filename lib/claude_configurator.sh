@@ -395,10 +395,20 @@ for i, line in enumerate(lines):
             continue
 
         # Parse deny list items
-        if in_deny and re.match(r'-\s+["\']?(.+)["\']?', stripped):
-            match = re.search(r'-\s+["\']?(.+?)["\']?\s*$', stripped)
+        if in_deny and re.match(r'-\s+', stripped):
+            # Extract the deny item, handling quotes and comments
+            # Format: - "item" # comment  OR  - item # comment
+            match = re.search(r'-\s+(["\']?)(.+?)\1(?:\s*#.*)?$', stripped)
             if match:
-                deny_item = match.group(1).strip().strip('"').strip("'")
+                deny_item = match.group(2).strip()
+                # Remove any trailing comments that weren't caught by regex
+                if '#' in deny_item and not deny_item.startswith('#'):
+                    # Find the last quote (if any) before the comment
+                    quote_pos = max(deny_item.rfind('"'), deny_item.rfind("'"))
+                    hash_pos = deny_item.find('#')
+                    # Only strip comment if it's after any quotes
+                    if hash_pos > quote_pos:
+                        deny_item = deny_item[:hash_pos].strip()
                 deny_list.append(deny_item)
 
         # Exit deny section if we hit a non-list-item line

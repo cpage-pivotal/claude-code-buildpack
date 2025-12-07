@@ -800,6 +800,45 @@ else
     assert_failure "Should handle empty deny list"
 fi
 
+# Test: Parse deny list with inline comments
+print_test_header "Test: Parse deny list with inline comments"
+cat > "${TEST_DIR}/.claude-code-config-comments.yml" <<'EOF'
+claudeCode:
+  enabled: true
+  settings:
+    alwaysThinkingEnabled: true
+    permissions:
+      deny:
+        # Block specific MCP tools
+        - "mcp__github__create_issue"        # Block GitHub issue creation
+        - "mcp__github__delete_repository"   # Block repo deletion
+        - "Bash(curl:*)"  # Block curl
+EOF
+
+output_file6="${TEST_DIR}/.claude-settings-comments-test.json"
+if parse_settings_from_yaml "${TEST_DIR}/.claude-code-config-comments.yml" "${output_file6}"; then
+    if [ -f "${output_file6}" ]; then
+        # Verify no comments are included in the deny items
+        if grep -q '# Block' "${output_file6}"; then
+            echo "Generated settings.json contains comments:"
+            cat "${output_file6}"
+            assert_failure "Should strip inline comments from deny items"
+        elif grep -q '"mcp__github__create_issue"' "${output_file6}" && \
+             grep -q '"mcp__github__delete_repository"' "${output_file6}" && \
+             grep -q '"Bash(curl:\*)"' "${output_file6}"; then
+            assert_success "Should parse deny list with inline comments"
+        else
+            echo "Generated settings.json missing expected items:"
+            cat "${output_file6}"
+            assert_failure "Should parse deny list with inline comments"
+        fi
+    else
+        assert_failure "Should create output file"
+    fi
+else
+    assert_failure "Should parse deny list with inline comments"
+fi
+
 # Print summary
 echo ""
 echo "======================================"
