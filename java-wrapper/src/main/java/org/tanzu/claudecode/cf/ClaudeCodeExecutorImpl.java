@@ -59,6 +59,9 @@ public class ClaudeCodeExecutorImpl implements ClaudeCodeExecutor {
     
     private final String claudePath;
     private final Map<String, String> baseEnvironment;
+    
+    // Lazy-initialized conversation session manager
+    private volatile ConversationSessionManager sessionManager;
 
     /**
      * Constructs a new executor using environment variables.
@@ -316,6 +319,169 @@ public class ClaudeCodeExecutorImpl implements ClaudeCodeExecutor {
             return null;
         }
     }
+
+    // ==================== Conversational Session Methods ====================
+
+    @Override
+    public String createConversationSession() {
+        return createConversationSession(ClaudeCodeOptions.defaults());
+    }
+
+    @Override
+    public String createConversationSession(ClaudeCodeOptions options) {
+        if (options == null) {
+            throw new IllegalArgumentException("Options cannot be null");
+        }
+        
+        logger.debug("Creating conversation session with options: {}", options);
+        
+        // Lazy initialization of session manager with timeout from options
+        ConversationSessionManager manager = getOrCreateSessionManager(options);
+        
+        try {
+            String sessionId = manager.createSession(options);
+            logger.info("Created conversation session: {}", sessionId);
+            return sessionId;
+        } catch (Exception e) {
+            logger.error("Failed to create conversation session", e);
+            throw new ClaudeCodeExecutionException("Failed to create conversation session", e);
+        }
+    }
+
+    @Override
+    public String sendMessage(String sessionId, String message) {
+        if (sessionId == null || sessionId.trim().isEmpty()) {
+            throw new IllegalArgumentException("Session ID cannot be null or empty");
+        }
+        if (message == null || message.trim().isEmpty()) {
+            throw new IllegalArgumentException("Message cannot be null or empty");
+        }
+        
+        logger.debug("Sending message to session {}: {} chars", sessionId, message.length());
+        
+        // Get session manager (will throw if not initialized)
+        ConversationSessionManager manager = getSessionManager();
+        if (manager == null) {
+            throw new IllegalStateException("No conversation sessions have been created");
+        }
+        
+        try {
+            // Get the session
+            ConversationSession session = manager.getSession(sessionId);
+            
+            // Send message
+            String response = session.sendMessage(message);
+            
+            logger.debug("Received response from session {}: {} chars", sessionId, response.length());
+            return response;
+            
+        } catch (ConversationSessionManager.SessionNotFoundException e) {
+            logger.warn("Session not found: {}", sessionId);
+            throw e;
+        } catch (ConversationSession.ConversationSessionException e) {
+            logger.error("Failed to send message to session {}", sessionId, e);
+            throw new ClaudeCodeExecutionException("Failed to send message to session", e);
+        }
+    }
+
+    @Override
+    public void closeConversationSession(String sessionId) {
+        if (sessionId == null || sessionId.trim().isEmpty()) {
+            throw new IllegalArgumentException("Session ID cannot be null or empty");
+        }
+        
+        logger.debug("Closing conversation session: {}", sessionId);
+        
+        // Get session manager (safe if not initialized - will just return)
+        ConversationSessionManager manager = getSessionManager();
+        if (manager != null) {
+            manager.closeSession(sessionId);
+            logger.info("Closed conversation session: {}", sessionId);
+        } else {
+            logger.debug("Session manager not initialized, session {} may not exist", sessionId);
+        }
+    }
+
+    @Override
+    public boolean isSessionActive(String sessionId) {
+        if (sessionId == null || sessionId.trim().isEmpty()) {
+            return false;
+        }
+        
+        // Get session manager (safe if not initialized)
+        ConversationSessionManager manager = getSessionManager();
+        if (manager == null) {
+            return false;
+        }
+        
+        return manager.isSessionActive(sessionId);
+    }
+
+    /**
+     * Get the session manager, or null if not yet initialized.
+     *
+     * @return the session manager, or null
+     */
+    private ConversationSessionManager getSessionManager() {
+        return sessionManager;
+    }
+
+    /**
+     * Get or create the session manager (lazy initialization).
+     * <p>
+     * Uses double-checked locking for thread-safe lazy initialization.
+     * The inactivity timeout is determined from the first session creation options.
+     * If not specified in options, defaults to 30 minutes.
+     * </p>
+     *
+     * @param options the options containing session configuration
+     * @return the session manager
+     */
+    private ConversationSessionManager getOrCreateSessionManager(ClaudeCodeOptions options) {
+        // Double-checked locking for lazy initialization
+        if (sessionManager == null) {
+            synchronized (this) {
+                if (sessionManager == null) {
+                    // Use timeout from options, or default to 30 minutes
+                    java.time.Duration timeout = options.getSessionInactivityTimeout();
+                    if (timeout == null) {
+                        timeout = java.time.Duration.ofMinutes(30);
+                        logger.info("Initializing conversation session manager with default timeout: {}", timeout);
+                    } else {
+                        logger.info("Initializing conversation session manager with custom timeout: {}", timeout);
+                    }
+                    sessionManager = new ConversationSessionManager(timeout);
+                }
+            }
+        }
+        return sessionManager;
+    }
+
+    /**
+     * Shutdown the executor and clean up resources.
+     * <p>
+     * This method should be called when the executor is no longer needed to ensure
+     * all conversation sessions are properly closed and resources are released.
+     * </p>
+     * <p>
+     * Note: This is not part of the ClaudeCodeExecutor interface but is provided
+     * for applications that need explicit lifecycle management (e.g., Spring beans
+     * with @PreDestroy).
+     * </p>
+     */
+    public void shutdown() {
+        logger.info("Shutting down ClaudeCodeExecutor");
+        
+        ConversationSessionManager manager = getSessionManager();
+        if (manager != null) {
+            logger.info("Shutting down conversation session manager");
+            manager.shutdown();
+        }
+        
+        logger.info("ClaudeCodeExecutor shutdown complete");
+    }
+
+    // ==================== Private Utility Methods ====================
 
     /**
      * Build the command line arguments for Claude Code CLI.

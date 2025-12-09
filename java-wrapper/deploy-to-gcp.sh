@@ -191,7 +191,7 @@ print_next_steps() {
     echo "  <dependency>"
     echo "    <groupId>org.tanzu.claudecode</groupId>"
     echo "    <artifactId>claude-code-cf-wrapper</artifactId>"
-    echo "    <version>1.0.0</version>"
+    echo "    <version>1.1.0</version>"
     echo "  </dependency>"
     echo "</dependencies>"
     echo

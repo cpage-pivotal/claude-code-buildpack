@@ -9,10 +9,11 @@ import java.util.Objects;
  * Configuration options for Claude Code CLI command execution.
  * <p>
  * This class provides a builder pattern for configuring Claude Code execution
- * parameters such as timeout, model selection, and additional environment variables.
+ * parameters such as timeout, model selection, additional environment variables,
+ * and conversational session settings.
  * </p>
  *
- * <p>Example usage:</p>
+ * <h2>Single-Shot Execution Options</h2>
  * <pre>{@code
  * ClaudeCodeOptions options = ClaudeCodeOptions.builder()
  *     .timeout(Duration.ofMinutes(5))
@@ -20,6 +21,18 @@ import java.util.Objects;
  *     .dangerouslySkipPermissions(true)
  *     .env("CUSTOM_VAR", "value")
  *     .build();
+ * }</pre>
+ *
+ * <h2>Conversational Session Options</h2>
+ * <pre>{@code
+ * ClaudeCodeOptions options = ClaudeCodeOptions.builder()
+ *     .timeout(Duration.ofMinutes(5))
+ *     .model("sonnet")
+ *     .sessionInactivityTimeout(Duration.ofMinutes(45))  // Custom session timeout
+ *     .workingDirectory("/home/vcap/app")                // Custom working directory
+ *     .build();
+ * 
+ * String sessionId = executor.createConversationSession(options);
  * }</pre>
  *
  * @author Claude Code Buildpack Team
@@ -31,12 +44,18 @@ public class ClaudeCodeOptions {
     private final String model;
     private final boolean dangerouslySkipPermissions;
     private final Map<String, String> additionalEnv;
+    
+    // Conversational session configuration (since 1.1.0)
+    private final Duration sessionInactivityTimeout;
+    private final String workingDirectory;
 
     private ClaudeCodeOptions(Builder builder) {
         this.timeout = builder.timeout;
         this.model = builder.model;
         this.dangerouslySkipPermissions = builder.dangerouslySkipPermissions;
         this.additionalEnv = new HashMap<>(builder.additionalEnv);
+        this.sessionInactivityTimeout = builder.sessionInactivityTimeout;
+        this.workingDirectory = builder.workingDirectory;
     }
 
     /**
@@ -76,6 +95,45 @@ public class ClaudeCodeOptions {
     }
 
     /**
+     * Get the inactivity timeout for conversational sessions.
+     * <p>
+     * This timeout determines how long a conversation session can remain idle
+     * before being automatically expired and cleaned up. The timeout is checked
+     * by the background cleanup task every 5 minutes.
+     * </p>
+     * <p>
+     * If not set, the {@link ConversationSessionManager} will use its default
+     * timeout (typically 30 minutes).
+     * </p>
+     *
+     * @return the session inactivity timeout, or null to use manager default
+     * @since 1.1.0
+     * @see ConversationSessionManager
+     */
+    public Duration getSessionInactivityTimeout() {
+        return sessionInactivityTimeout;
+    }
+
+    /**
+     * Get the working directory for the Claude CLI process.
+     * <p>
+     * The working directory affects where the Claude CLI looks for configuration
+     * files and stores session history. Claude CLI uses directory-based session
+     * tracking in {@code ~/.claude/sessions/}.
+     * </p>
+     * <p>
+     * If not set, the Claude CLI will use the current working directory of the
+     * Java process (typically the application root in Cloud Foundry).
+     * </p>
+     *
+     * @return the working directory path, or null for default
+     * @since 1.1.0
+     */
+    public String getWorkingDirectory() {
+        return workingDirectory;
+    }
+
+    /**
      * Create a new builder for ClaudeCodeOptions.
      *
      * @return a new builder instance
@@ -101,6 +159,10 @@ public class ClaudeCodeOptions {
         private String model;
         private boolean dangerouslySkipPermissions = true;
         private Map<String, String> additionalEnv = new HashMap<>();
+        
+        // Conversational session configuration (since 1.1.0)
+        private Duration sessionInactivityTimeout;
+        private String workingDirectory;
 
         /**
          * Constructs a new Builder instance.
@@ -189,6 +251,76 @@ public class ClaudeCodeOptions {
         }
 
         /**
+         * Set the inactivity timeout for conversational sessions.
+         * <p>
+         * This timeout determines how long a conversation session can remain idle
+         * before being automatically expired and cleaned up. Sessions that exceed
+         * this timeout will be closed by the background cleanup task.
+         * </p>
+         * <p>
+         * Default: null (uses {@link ConversationSessionManager} default of 30 minutes)
+         * </p>
+         * <p>
+         * <strong>Example:</strong>
+         * </p>
+         * <pre>{@code
+         * ClaudeCodeOptions options = ClaudeCodeOptions.builder()
+         *     .sessionInactivityTimeout(Duration.ofMinutes(45))
+         *     .build();
+         * 
+         * // Session will auto-expire after 45 minutes of inactivity
+         * String sessionId = executor.createConversationSession(options);
+         * }</pre>
+         *
+         * @param timeout the session inactivity timeout duration
+         * @return this builder
+         * @throws IllegalArgumentException if timeout is null, zero, or negative
+         * @since 1.1.0
+         */
+        public Builder sessionInactivityTimeout(Duration timeout) {
+            Objects.requireNonNull(timeout, "Session inactivity timeout cannot be null");
+            if (timeout.isNegative() || timeout.isZero()) {
+                throw new IllegalArgumentException("Session inactivity timeout must be positive");
+            }
+            this.sessionInactivityTimeout = timeout;
+            return this;
+        }
+
+        /**
+         * Set the working directory for the Claude CLI process.
+         * <p>
+         * The working directory affects where the Claude CLI looks for configuration
+         * files and stores session history. This is particularly useful in Cloud Foundry
+         * environments where you want to control the session storage location.
+         * </p>
+         * <p>
+         * Default: null (uses current working directory of Java process)
+         * </p>
+         * <p>
+         * <strong>Example:</strong>
+         * </p>
+         * <pre>{@code
+         * ClaudeCodeOptions options = ClaudeCodeOptions.builder()
+         *     .workingDirectory("/home/vcap/app")
+         *     .build();
+         * 
+         * String sessionId = executor.createConversationSession(options);
+         * }</pre>
+         *
+         * @param directory the working directory path
+         * @return this builder
+         * @throws IllegalArgumentException if directory is null or empty
+         * @since 1.1.0
+         */
+        public Builder workingDirectory(String directory) {
+            if (directory == null || directory.trim().isEmpty()) {
+                throw new IllegalArgumentException("Working directory cannot be null or empty");
+            }
+            this.workingDirectory = directory;
+            return this;
+        }
+
+        /**
          * Build the ClaudeCodeOptions instance.
          *
          * @return a new ClaudeCodeOptions instance
@@ -205,6 +337,8 @@ public class ClaudeCodeOptions {
                 ", model='" + model + '\'' +
                 ", dangerouslySkipPermissions=" + dangerouslySkipPermissions +
                 ", additionalEnv=" + additionalEnv.keySet() +
+                ", sessionInactivityTimeout=" + sessionInactivityTimeout +
+                ", workingDirectory='" + workingDirectory + '\'' +
                 '}';
     }
 }
