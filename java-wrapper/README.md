@@ -44,7 +44,7 @@ Add the GCP Artifact Registry repository and dependency to your `pom.xml`:
     <dependency>
         <groupId>org.tanzu.claudecode</groupId>
         <artifactId>claude-code-cf-wrapper</artifactId>
-        <version>1.0.0</version>
+        <version>1.1.0</version>
     </dependency>
 </dependencies>
 ```
@@ -63,7 +63,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'org.tanzu.claudecode:claude-code-cf-wrapper:1.0.0'
+    implementation 'org.tanzu.claudecode:claude-code-cf-wrapper:1.1.0'
 }
 ```
 
