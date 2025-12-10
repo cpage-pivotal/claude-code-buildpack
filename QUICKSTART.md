@@ -6,12 +6,18 @@ Get Claude Code CLI running in your Cloud Foundry Java application in 5 minutes.
 
 - Cloud Foundry CLI installed
 - Access to a Cloud Foundry environment
-- Anthropic API key (get one at https://console.anthropic.com/)
+- Authentication credentials (one of the following):
+  - Anthropic API key (get one at https://console.anthropic.com/)
+  - OAuth token from `claude setup-token` command
 - Java application ready to deploy
 
-## Step 1: Get Your API Key
+## Step 1: Get Your Authentication Credentials
 
+**Option 1: API Key**
 Sign up at https://console.anthropic.com/ and generate an API key. It should start with `sk-ant-`.
+
+**Option 2: OAuth Token**
+Run `claude setup-token` to generate an OAuth token for authentication.
 
 ## Step 2: Add Buildpack to Your Application
 
@@ -26,7 +32,9 @@ applications:
     - https://github.com/your-org/claude-code-buildpack
     - java_buildpack
   env:
-    ANTHROPIC_API_KEY: sk-ant-xxxxxxxxxxxxx  # Your API key
+    # Choose one authentication method:
+    ANTHROPIC_API_KEY: sk-ant-xxxxxxxxxxxxx      # Option 1: API key
+    # CLAUDE_CODE_OAUTH_TOKEN: <your-oauth-token>  # Option 2: OAuth token
     CLAUDE_CODE_ENABLED: true
 ```
 
@@ -88,7 +96,9 @@ applications:
       - https://github.com/your-org/claude-code-buildpack
       - java_buildpack
     env:
-      ANTHROPIC_API_KEY: sk-ant-xxxxxxxxxxxxx
+      # Choose one authentication method:
+      ANTHROPIC_API_KEY: sk-ant-xxxxxxxxxxxxx      # Option 1: API key
+      # CLAUDE_CODE_OAUTH_TOKEN: <your-oauth-token>  # Option 2: OAuth token
       CLAUDE_CODE_ENABLED: true
 ```
 
@@ -135,7 +145,15 @@ public String executeClaudeCode(String prompt) throws Exception {
 
     // Pass environment variables to subprocess
     Map<String, String> env = pb.environment();
-    env.put("ANTHROPIC_API_KEY", System.getenv("ANTHROPIC_API_KEY"));
+    // Claude CLI supports either ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN
+    String apiKey = System.getenv("ANTHROPIC_API_KEY");
+    String oauthToken = System.getenv("CLAUDE_CODE_OAUTH_TOKEN");
+    if (apiKey != null && !apiKey.isEmpty()) {
+        env.put("ANTHROPIC_API_KEY", apiKey);
+    }
+    if (oauthToken != null && !oauthToken.isEmpty()) {
+        env.put("CLAUDE_CODE_OAUTH_TOKEN", oauthToken);
+    }
     env.put("HOME", System.getenv("HOME"));
 
     // Redirect stderr to stdout (prevents buffer deadlock)
@@ -190,7 +208,15 @@ public class ClaudeController {
             );
 
             Map<String, String> env = pb.environment();
-            env.put("ANTHROPIC_API_KEY", System.getenv("ANTHROPIC_API_KEY"));
+            // Claude CLI supports either ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN
+            String apiKey = System.getenv("ANTHROPIC_API_KEY");
+            String oauthToken = System.getenv("CLAUDE_CODE_OAUTH_TOKEN");
+            if (apiKey != null && !apiKey.isEmpty()) {
+                env.put("ANTHROPIC_API_KEY", apiKey);
+            }
+            if (oauthToken != null && !oauthToken.isEmpty()) {
+                env.put("CLAUDE_CODE_OAUTH_TOKEN", oauthToken);
+            }
             env.put("HOME", System.getenv("HOME"));
 
             pb.redirectErrorStream(true);
@@ -252,6 +278,8 @@ Make sure you have one of these:
 Verify:
 ```bash
 cf env my-java-app | grep ANTHROPIC_API_KEY
+# Or check for OAuth token
+cf env my-java-app | grep CLAUDE_CODE_OAUTH_TOKEN
 ```
 
 The key should start with `sk-ant-`.
@@ -281,7 +309,8 @@ You should see: `-----> Claude Code CLI Buildpack`
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `ANTHROPIC_API_KEY` | Yes | - | Your Anthropic API key |
+| `ANTHROPIC_API_KEY` | Yes* | - | Your Anthropic API key |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Yes* | - | OAuth token (alternative to API key) |
 | `CLAUDE_CODE_ENABLED` | No | false | Enable the buildpack |
 | `CLAUDE_CODE_VERSION` | No | latest | Specific version to install |
 | `CLAUDE_CODE_LOG_LEVEL` | No | info | CLI log level |

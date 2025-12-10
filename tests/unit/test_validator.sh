@@ -119,8 +119,43 @@ fi
 
 unset ANTHROPIC_API_KEY
 
-# Test 6: Config file validation
-print_test_header "Test 6: Config file validation"
+# Test 6: OAuth token validation
+print_test_header "Test 6: OAuth token validation"
+
+# Test with valid OAuth token
+export CLAUDE_CODE_OAUTH_TOKEN="test-oauth-token-123"
+mkdir -p "${TEST_DIR}/test-oauth-app"
+if validate_environment "${TEST_DIR}/test-oauth-app" 2>&1 | grep -q "OAuth token detected"; then
+    assert_success "Valid OAuth token should be recognized"
+else
+    assert_failure "Valid OAuth token should be recognized"
+fi
+
+unset CLAUDE_CODE_OAUTH_TOKEN
+
+# Test with both API key and OAuth token (both should be accepted)
+export ANTHROPIC_API_KEY="sk-ant-test456"
+export CLAUDE_CODE_OAUTH_TOKEN="test-oauth-token-456"
+mkdir -p "${TEST_DIR}/test-both-app"
+if validate_environment "${TEST_DIR}/test-both-app" 2>&1 | grep -q "API key format validated"; then
+    assert_success "Should accept when both credentials are present"
+else
+    assert_failure "Should accept when both credentials are present"
+fi
+
+unset ANTHROPIC_API_KEY
+unset CLAUDE_CODE_OAUTH_TOKEN
+
+# Test with neither credential set
+mkdir -p "${TEST_DIR}/test-no-auth-app"
+if validate_environment "${TEST_DIR}/test-no-auth-app" 2>&1 | grep -q "Neither.*is set"; then
+    assert_success "Should warn when neither credential is set"
+else
+    assert_failure "Should warn when neither credential is set"
+fi
+
+# Test 7: Config file validation
+print_test_header "Test 7: Config file validation"
 
 # Create a test config file
 TEST_CONFIG="${TEST_DIR}/test-config.yml"

@@ -52,7 +52,9 @@ mvn clean package
 ```bash
 # Set environment variables
 export CLAUDE_CLI_PATH=/path/to/claude
-export ANTHROPIC_API_KEY=sk-ant-xxxxx
+# Choose one authentication method:
+export ANTHROPIC_API_KEY=sk-ant-xxxxx          # Option 1: API key
+# export CLAUDE_CODE_OAUTH_TOKEN=<your-token>  # Option 2: OAuth token
 
 # Run the application
 mvn spring-boot:run
@@ -66,7 +68,9 @@ mvn spring-boot:run
 
 ```bash
 # Set the API key variable
-cf set-env claude-code-demo ANTHROPIC_API_KEY sk-ant-xxxxx
+# Set authentication credentials (choose one)
+cf set-env claude-code-demo ANTHROPIC_API_KEY sk-ant-xxxxx           # Option 1: API key
+# cf set-env claude-code-demo CLAUDE_CODE_OAUTH_TOKEN <your-token>  # Option 2: OAuth token
 
 # Push the application with buildpacks
 cf push -b nodejs_buildpack -b claude-code-buildpack -b java_buildpack

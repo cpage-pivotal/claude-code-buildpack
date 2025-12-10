@@ -18,12 +18,12 @@ validate_environment() {
         return 1
     fi
 
-    # Validate ANTHROPIC_API_KEY
-    if [ -z "${ANTHROPIC_API_KEY}" ]; then
-        echo "       WARNING: ANTHROPIC_API_KEY is not set"
-        echo "       Claude Code will require an API key to function"
-        echo "       Set ANTHROPIC_API_KEY environment variable in your manifest"
-    else
+    # Validate ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN
+    if [ -z "${ANTHROPIC_API_KEY}" ] && [ -z "${CLAUDE_CODE_OAUTH_TOKEN}" ]; then
+        echo "       WARNING: Neither ANTHROPIC_API_KEY nor CLAUDE_CODE_OAUTH_TOKEN is set"
+        echo "       Claude Code requires authentication to function"
+        echo "       Set either ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN in your manifest"
+    elif [ -n "${ANTHROPIC_API_KEY}" ]; then
         # Basic validation - check if it looks like an Anthropic API key
         if [[ ! "${ANTHROPIC_API_KEY}" =~ ^sk-ant- ]]; then
             echo "       WARNING: ANTHROPIC_API_KEY format appears invalid"
@@ -31,6 +31,8 @@ validate_environment() {
         else
             echo "       API key format validated"
         fi
+    elif [ -n "${CLAUDE_CODE_OAUTH_TOKEN}" ]; then
+        echo "       OAuth token detected (using CLAUDE_CODE_OAUTH_TOKEN)"
     fi
 
     # Check disk space (basic check)

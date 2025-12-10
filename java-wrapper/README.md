@@ -17,7 +17,9 @@ A Java library for seamless integration of Claude Code CLI in Cloud Foundry appl
 - Java 17 or higher
 - Claude Code CLI installed via the buildpack (automatically handled in Cloud Foundry)
 - `CLAUDE_CLI_PATH` environment variable (set by buildpack)
-- `ANTHROPIC_API_KEY` environment variable
+- Authentication credentials (one of the following):
+  - `ANTHROPIC_API_KEY` environment variable
+  - `CLAUDE_CODE_OAUTH_TOKEN` environment variable
 
 ## Installation
 
@@ -44,7 +46,7 @@ Add the GCP Artifact Registry repository and dependency to your `pom.xml`:
     <dependency>
         <groupId>org.tanzu.claudecode</groupId>
         <artifactId>claude-code-cf-wrapper</artifactId>
-        <version>1.1.0</version>
+        <version>1.1.1</version>
     </dependency>
 </dependencies>
 ```
@@ -63,7 +65,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'org.tanzu.claudecode:claude-code-cf-wrapper:1.1.0'
+    implementation 'org.tanzu.claudecode:claude-code-cf-wrapper:1.1.1'
 }
 ```
 
@@ -312,7 +314,7 @@ try {
 
 1. Add the library to your `pom.xml` or `build.gradle`
 2. Create a `.claude-code-config.yml` configuration file
-3. Set `ANTHROPIC_API_KEY` in your manifest
+3. Set authentication credentials in your manifest (`ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`)
 
 ### Configuration File Location
 
@@ -332,7 +334,9 @@ applications:
     - https://github.com/your-org/claude-code-buildpack
     - https://github.com/cloudfoundry/java-buildpack
   env:
-    ANTHROPIC_API_KEY: sk-ant-xxxxxxxxxxxxx
+    # Choose one authentication method:
+    ANTHROPIC_API_KEY: sk-ant-xxxxxxxxxxxxx         # Option 1: API key
+    # CLAUDE_CODE_OAUTH_TOKEN: <your-oauth-token>  # Option 2: OAuth token
 ```
 
 ### .claude-code-config.yml Example

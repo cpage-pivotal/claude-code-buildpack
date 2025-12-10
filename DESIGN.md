@@ -160,7 +160,7 @@ The buildpack will:
    - npm automatically creates symlink at install time
 
 3. **Configure Authentication**
-   - Read `ANTHROPIC_API_KEY` from environment or manifest
+   - Read authentication credentials from environment or manifest (`ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`)
    - Create `.profile.d` script in `BUILD_DIR/.profile.d/` (maps to `/home/vcap/app/.profile.d/` at runtime)
    - Set up environment variables for runtime
    - **IMPORTANT**: Scripts must be in `/home/vcap/app/.profile.d/`, NOT in deps directory
@@ -305,7 +305,9 @@ applications:
     - https://github.com/your-org/claude-code-buildpack
     - https://github.com/cloudfoundry/java-buildpack
   env:
-    ANTHROPIC_API_KEY: sk-ant-xxxxxxxxxxxxx
+    # Choose one authentication method:
+    ANTHROPIC_API_KEY: sk-ant-xxxxxxxxxxxxx      # Option 1: API key
+    # CLAUDE_CODE_OAUTH_TOKEN: <your-oauth-token>  # Option 2: OAuth token
     CLAUDE_CODE_ENABLED: true
     CLAUDE_CODE_VERSION: latest  # Optional: specify version
   claude-code-config:
@@ -365,8 +367,9 @@ claudeCode:
 
 ### 5. Environment Variables
 
-**Required:**
-- `ANTHROPIC_API_KEY`: Authentication token for Claude API
+**Required (one of the following):**
+- `ANTHROPIC_API_KEY`: Authentication API key for Claude API
+- `CLAUDE_CODE_OAUTH_TOKEN`: OAuth token for Claude API (alternative to API key)
 
 **Optional:**
 - `CLAUDE_CODE_VERSION`: Specific version to install (default: `latest`)
@@ -1214,7 +1217,7 @@ cf push -b nodejs_buildpack -b claude-code-buildpack -b java_buildpack
 <dependency>
     <groupId>com.claudecode</groupId>
     <artifactId>claude-code-cf-wrapper</artifactId>
-    <version>1.1.0</version>
+    <version>1.1.1</version>
 </dependency>
 
 // Application code

@@ -175,7 +175,9 @@ Use the provided `StreamingExamples` class:
 ```bash
 # Set environment variables
 export CLAUDE_CLI_PATH=/path/to/claude
-export ANTHROPIC_API_KEY=sk-ant-...
+# Choose one authentication method:
+export ANTHROPIC_API_KEY=sk-ant-...          # Option 1: API key
+# export CLAUDE_CODE_OAUTH_TOKEN=<your-token>  # Option 2: OAuth token
 
 # Run examples
 cd java-wrapper/examples/spring-boot-app

@@ -34,7 +34,7 @@ Add the following repository to your `pom.xml`:
     <dependency>
         <groupId>org.tanzu.claudecode</groupId>
         <artifactId>claude-code-cf-wrapper</artifactId>
-        <version>1.1.0</version>
+        <version>1.1.1</version>
     </dependency>
 </dependencies>
 ```
@@ -146,7 +146,9 @@ Spring Boot will automatically package `src/main/resources/.claude/` into `BOOT-
   ```
 
 - [ ] **Environment Variables**
-  - [ ] `ANTHROPIC_API_KEY` is set (or will be set in CF)
+  - [ ] Authentication credentials set (or will be set in CF):
+    - [ ] `ANTHROPIC_API_KEY` (API key option), or
+    - [ ] `CLAUDE_CODE_OAUTH_TOKEN` (OAuth token option)
   - [ ] `CLAUDE_CODE_ENABLED=true` if not using config file
 
 - [ ] **Manifest Configuration**
@@ -158,7 +160,9 @@ Spring Boot will automatically package `src/main/resources/.claude/` into `BOOT-
       - claude-code-buildpack  # Installs Claude Code CLI
       - java_buildpack         # Runs Java application
     env:
-      ANTHROPIC_API_KEY: ((your-api-key))
+      # Choose one authentication method:
+      ANTHROPIC_API_KEY: ((your-api-key))              # Option 1: API key
+      # CLAUDE_CODE_OAUTH_TOKEN: ((your-oauth-token))  # Option 2: OAuth token
       CLAUDE_CODE_ENABLED: true
   ```
 

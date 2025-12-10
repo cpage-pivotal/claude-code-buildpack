@@ -15,8 +15,10 @@ applications:
 
   # Required environment variables
   env:
-    # Claude Code Configuration
-    ANTHROPIC_API_KEY: sk-ant-xxxxxxxxxxxxx  # Replace with your API key
+    # Claude Code Authentication (choose one)
+    ANTHROPIC_API_KEY: sk-ant-xxxxxxxxxxxxx         # Option 1: API key
+    # CLAUDE_CODE_OAUTH_TOKEN: <your-oauth-token>  # Option 2: OAuth token (from `claude setup-token`)
+
     CLAUDE_CODE_ENABLED: true
 
     # Optional: Claude Code settings

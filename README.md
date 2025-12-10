@@ -33,7 +33,7 @@ applications:
     - https://github.com/your-org/claude-code-buildpack
     - java_buildpack
   env:
-    ANTHROPIC_API_KEY: sk-ant-xxxxxxxxxxxxx
+    ANTHROPIC_API_KEY: sk-ant-xxxxxxxxxxxxx  # Or use CLAUDE_CODE_OAUTH_TOKEN
     CLAUDE_CODE_ENABLED: true
 ```
 
@@ -55,7 +55,7 @@ claudeCode:
   model: sonnet  # Options: sonnet, opus, haiku
 ```
 
-**Note:** You still need to set `ANTHROPIC_API_KEY` as an environment variable for security reasons.
+**Note:** You still need to set `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` as an environment variable for security reasons.
 
 ### 3. Deploy Your Application
 
@@ -110,7 +110,7 @@ applications:
       - https://github.com/your-org/claude-code-buildpack
       - java_buildpack
     env:
-      ANTHROPIC_API_KEY: sk-ant-xxxxxxxxxxxxx
+      ANTHROPIC_API_KEY: sk-ant-xxxxxxxxxxxxx  # Or use CLAUDE_CODE_OAUTH_TOKEN
 ```
 
 **That's it!** No additional Maven plugins required. The buildpack automatically handles extracting the config from `BOOT-INF/classes/` during staging.
@@ -275,9 +275,10 @@ For complete deny list examples and security recommendations, see:
 
 ### Environment Variables
 
-#### Required
+#### Required (one of the following)
 
 - `ANTHROPIC_API_KEY`: Your Anthropic API key (format: `sk-ant-...`)
+- `CLAUDE_CODE_OAUTH_TOKEN`: OAuth token from `claude setup-token` command
 
 #### Optional
 
@@ -312,7 +313,7 @@ For production applications, we recommend using the official Java wrapper librar
     <dependency>
         <groupId>org.tanzu.claudecode</groupId>
         <artifactId>claude-code-cf-wrapper</artifactId>
-        <version>1.1.0</version>
+        <version>1.1.1</version>
     </dependency>
 </dependencies>
 ```
@@ -346,7 +347,15 @@ public class ClaudeExample {
 
         // Pass environment variables to subprocess
         Map<String, String> env = pb.environment();
-        env.put("ANTHROPIC_API_KEY", System.getenv("ANTHROPIC_API_KEY"));
+        // Claude CLI supports either ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN
+        String apiKey = System.getenv("ANTHROPIC_API_KEY");
+        String oauthToken = System.getenv("CLAUDE_CODE_OAUTH_TOKEN");
+        if (apiKey != null && !apiKey.isEmpty()) {
+            env.put("ANTHROPIC_API_KEY", apiKey);
+        }
+        if (oauthToken != null && !oauthToken.isEmpty()) {
+            env.put("CLAUDE_CODE_OAUTH_TOKEN", oauthToken);
+        }
         env.put("HOME", System.getenv("HOME"));
 
         // Redirect stderr to stdout to avoid buffer deadlock
@@ -411,7 +420,15 @@ public class ClaudeController {
         );
 
         Map<String, String> env = pb.environment();
-        env.put("ANTHROPIC_API_KEY", System.getenv("ANTHROPIC_API_KEY"));
+        // Claude CLI supports either ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN
+        String apiKey = System.getenv("ANTHROPIC_API_KEY");
+        String oauthToken = System.getenv("CLAUDE_CODE_OAUTH_TOKEN");
+        if (apiKey != null && !apiKey.isEmpty()) {
+            env.put("ANTHROPIC_API_KEY", apiKey);
+        }
+        if (oauthToken != null && !oauthToken.isEmpty()) {
+            env.put("CLAUDE_CODE_OAUTH_TOKEN", oauthToken);
+        }
         env.put("HOME", System.getenv("HOME"));
 
         pb.redirectErrorStream(true);
@@ -448,7 +465,7 @@ When using `ProcessBuilder` to invoke Claude Code:
 
 1. **✅ DO close stdin**: `process.getOutputStream().close()`
 2. **✅ DO redirect stderr**: `pb.redirectErrorStream(true)`
-3. **✅ DO pass API key**: Add `ANTHROPIC_API_KEY` to subprocess environment
+3. **✅ DO pass authentication**: Add `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` to subprocess environment
 4. **✅ DO use timeout**: `process.waitFor(3, TimeUnit.MINUTES)`
 
 Without these, your process will hang or timeout!
@@ -833,10 +850,12 @@ cf logs my-app --recent | grep "Claude Code"
 
 ### API Key issues
 
-Verify your API key is set:
+Verify your API key or OAuth token is set:
 
 ```bash
 cf env my-app | grep ANTHROPIC_API_KEY
+# Or check for OAuth token
+cf env my-app | grep CLAUDE_CODE_OAUTH_TOKEN
 ```
 
 ### Installation failures
