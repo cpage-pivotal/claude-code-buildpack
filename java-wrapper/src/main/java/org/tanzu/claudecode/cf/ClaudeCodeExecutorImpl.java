@@ -268,10 +268,11 @@ public class ClaudeCodeExecutorImpl implements ClaudeCodeExecutor {
                 return false;
             }
             
-            // Check if API key is set
+            // Check if API key or OAuth token is set
             String apiKey = baseEnvironment.get("ANTHROPIC_API_KEY");
-            if (apiKey == null || apiKey.isEmpty()) {
-                logger.warn("ANTHROPIC_API_KEY not set");
+            String oauthToken = baseEnvironment.get("CLAUDE_CODE_OAUTH_TOKEN");
+            if ((apiKey == null || apiKey.isEmpty()) && (oauthToken == null || oauthToken.isEmpty())) {
+                logger.warn("Neither ANTHROPIC_API_KEY nor CLAUDE_CODE_OAUTH_TOKEN is set");
                 return false;
             }
             
@@ -508,31 +509,56 @@ public class ClaudeCodeExecutorImpl implements ClaudeCodeExecutor {
      * Build base environment variables from system environment.
      */
     private Map<String, String> buildBaseEnvironment() {
-        String apiKey = getRequiredEnv("ANTHROPIC_API_KEY");
-        return buildEnvironment(apiKey);
+        // Try to get API key or OAuth token
+        String apiKey = System.getenv("ANTHROPIC_API_KEY");
+        String oauthToken = System.getenv("CLAUDE_CODE_OAUTH_TOKEN");
+
+        // At least one must be set
+        if ((apiKey == null || apiKey.isEmpty()) && (oauthToken == null || oauthToken.isEmpty())) {
+            throw new IllegalStateException(
+                "Neither ANTHROPIC_API_KEY nor CLAUDE_CODE_OAUTH_TOKEN environment variable is set"
+            );
+        }
+
+        return buildEnvironment(apiKey, oauthToken);
     }
 
     /**
      * Build environment variables with explicit API key.
+     * @deprecated Use buildEnvironment(String, String) instead
      */
+    @Deprecated
     private Map<String, String> buildEnvironment(String apiKey) {
+        return buildEnvironment(apiKey, null);
+    }
+
+    /**
+     * Build environment variables with explicit API key and/or OAuth token.
+     */
+    private Map<String, String> buildEnvironment(String apiKey, String oauthToken) {
         Map<String, String> env = new HashMap<>();
-        
-        // CRITICAL: Pass API key to subprocess
-        env.put("ANTHROPIC_API_KEY", apiKey);
-        
+
+        // CRITICAL: Pass API key and/or OAuth token to subprocess
+        // Claude CLI accepts either ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN
+        if (apiKey != null && !apiKey.isEmpty()) {
+            env.put("ANTHROPIC_API_KEY", apiKey);
+        }
+        if (oauthToken != null && !oauthToken.isEmpty()) {
+            env.put("CLAUDE_CODE_OAUTH_TOKEN", oauthToken);
+        }
+
         // Pass HOME directory (needed for .claude.json)
         String home = System.getenv("HOME");
         if (home != null && !home.isEmpty()) {
             env.put("HOME", home);
         }
-        
+
         // Pass NODE_EXTRA_CA_CERTS if set (for Cloud Foundry SSL)
         String nodeCaCerts = System.getenv("NODE_EXTRA_CA_CERTS");
         if (nodeCaCerts != null && !nodeCaCerts.isEmpty()) {
             env.put("NODE_EXTRA_CA_CERTS", nodeCaCerts);
         }
-        
+
         return env;
     }
 

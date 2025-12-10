@@ -347,10 +347,26 @@ public class ConversationSession implements AutoCloseable {
         command.add(prompt);
         
         ProcessBuilder pb = new ProcessBuilder(command);
-        
-        // Set up environment variables
-        pb.environment().put("ANTHROPIC_API_KEY", getRequiredEnv("ANTHROPIC_API_KEY"));
-        
+
+        // Set up environment variables - support both API key and OAuth token
+        String apiKey = System.getenv("ANTHROPIC_API_KEY");
+        String oauthToken = System.getenv("CLAUDE_CODE_OAUTH_TOKEN");
+
+        // At least one must be set
+        if ((apiKey == null || apiKey.isEmpty()) && (oauthToken == null || oauthToken.isEmpty())) {
+            throw new IllegalStateException(
+                "Neither ANTHROPIC_API_KEY nor CLAUDE_CODE_OAUTH_TOKEN environment variable is set"
+            );
+        }
+
+        // Pass both if available (Claude CLI will use whichever is set)
+        if (apiKey != null && !apiKey.isEmpty()) {
+            pb.environment().put("ANTHROPIC_API_KEY", apiKey);
+        }
+        if (oauthToken != null && !oauthToken.isEmpty()) {
+            pb.environment().put("CLAUDE_CODE_OAUTH_TOKEN", oauthToken);
+        }
+
         String home = System.getenv("HOME");
         if (home != null && !home.isEmpty()) {
             pb.environment().put("HOME", home);

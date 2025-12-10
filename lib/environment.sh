@@ -88,18 +88,22 @@ get_claude_code_version() {
     echo "${CLAUDE_CODE_VERSION:-latest}"
 }
 
-# Export API key handling (without exposing it in logs)
+# Export API key or OAuth token handling (without exposing it in logs)
 setup_api_key() {
     local deps_dir=$1
 
-    if [ -z "${ANTHROPIC_API_KEY}" ]; then
-        echo "       WARNING: ANTHROPIC_API_KEY not set"
-        echo "       Claude Code will not function without an API key"
+    if [ -z "${ANTHROPIC_API_KEY}" ] && [ -z "${CLAUDE_CODE_OAUTH_TOKEN}" ]; then
+        echo "       WARNING: Neither ANTHROPIC_API_KEY nor CLAUDE_CODE_OAUTH_TOKEN is set"
+        echo "       Claude Code will not function without authentication"
         return 1
     fi
 
-    # API key is available via environment variable
+    # API key or OAuth token is available via environment variable
     # We don't write it to disk for security reasons
-    echo "       API key detected (not logged for security)"
+    if [ -n "${ANTHROPIC_API_KEY}" ]; then
+        echo "       API key detected (not logged for security)"
+    elif [ -n "${CLAUDE_CODE_OAUTH_TOKEN}" ]; then
+        echo "       OAuth token detected (not logged for security)"
+    fi
     return 0
 }

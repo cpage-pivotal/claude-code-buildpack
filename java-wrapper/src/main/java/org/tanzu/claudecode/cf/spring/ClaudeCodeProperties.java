@@ -41,9 +41,15 @@ public class ClaudeCodeProperties {
 
     /**
      * Anthropic API key for authentication.
-     * If not specified, uses the ANTHROPIC_API_KEY environment variable.
+     * If not specified, uses the ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN environment variable.
      */
     private String apiKey;
+
+    /**
+     * Claude Code OAuth token for authentication.
+     * If not specified, uses the CLAUDE_CODE_OAUTH_TOKEN environment variable.
+     */
+    private String oauthToken;
 
     /**
      * Whether to enable the REST API controller.
@@ -92,16 +98,27 @@ public class ClaudeCodeProperties {
     }
 
     /**
-     * Returns the API key, falling back to ANTHROPIC_API_KEY environment variable.
+     * Returns the API key, falling back to ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN environment variable.
+     * Priority: configured apiKey > configured oauthToken > ANTHROPIC_API_KEY env > CLAUDE_CODE_OAUTH_TOKEN env
      *
-     * @return the API key
+     * @return the API key or OAuth token
      */
     public String getApiKey() {
-        // Fall back to environment variable if not set
-        if (apiKey == null || apiKey.isEmpty()) {
-            return System.getenv("ANTHROPIC_API_KEY");
+        // Priority 1: explicitly configured API key
+        if (apiKey != null && !apiKey.isEmpty()) {
+            return apiKey;
         }
-        return apiKey;
+        // Priority 2: explicitly configured OAuth token
+        if (oauthToken != null && !oauthToken.isEmpty()) {
+            return oauthToken;
+        }
+        // Priority 3: ANTHROPIC_API_KEY environment variable
+        String envApiKey = System.getenv("ANTHROPIC_API_KEY");
+        if (envApiKey != null && !envApiKey.isEmpty()) {
+            return envApiKey;
+        }
+        // Priority 4: CLAUDE_CODE_OAUTH_TOKEN environment variable
+        return System.getenv("CLAUDE_CODE_OAUTH_TOKEN");
     }
 
     /**
@@ -111,6 +128,28 @@ public class ClaudeCodeProperties {
      */
     public void setApiKey(String apiKey) {
         this.apiKey = apiKey;
+    }
+
+    /**
+     * Returns the OAuth token, falling back to CLAUDE_CODE_OAUTH_TOKEN environment variable.
+     *
+     * @return the OAuth token
+     */
+    public String getOauthToken() {
+        // Fall back to environment variable if not set
+        if (oauthToken == null || oauthToken.isEmpty()) {
+            return System.getenv("CLAUDE_CODE_OAUTH_TOKEN");
+        }
+        return oauthToken;
+    }
+
+    /**
+     * Sets the OAuth token.
+     *
+     * @param oauthToken the OAuth token
+     */
+    public void setOauthToken(String oauthToken) {
+        this.oauthToken = oauthToken;
     }
 
     /**
