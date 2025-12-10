@@ -33,9 +33,9 @@ Successfully configured and deployed the `claude-code-cf-wrapper` Maven artifact
 - ✅ Successfully deployed to GCP Artifact Registry
 - ✅ Public access configured (allUsers can read)
 - ✅ Artifacts published:
-  - `claude-code-cf-wrapper-1.1.0.jar` (25 KB)
-  - `claude-code-cf-wrapper-1.1.0-sources.jar` (18 KB)
-  - `claude-code-cf-wrapper-1.1.0-javadoc.jar` (4.2 MB)
+  - `claude-code-cf-wrapper-1.1.1.jar` (25 KB)
+  - `claude-code-cf-wrapper-1.1.1-sources.jar` (18 KB)
+  - `claude-code-cf-wrapper-1.1.1-javadoc.jar` (4.2 MB)
 
 ## Public Repository Details
 
@@ -45,7 +45,7 @@ Successfully configured and deployed the `claude-code-cf-wrapper` Maven artifact
 
 **Group ID:** `org.tanzu.claudecode`
 **Artifact ID:** `claude-code-cf-wrapper`
-**Version:** `1.1.0`
+**Version:** `1.1.1`
 
 ## Usage
 
@@ -63,7 +63,7 @@ Anyone can now use the artifact without authentication:
     <dependency>
         <groupId>org.tanzu.claudecode</groupId>
         <artifactId>claude-code-cf-wrapper</artifactId>
-        <version>1.1.0</version>
+        <version>1.1.1</version>
     </dependency>
 </dependencies>
 ```

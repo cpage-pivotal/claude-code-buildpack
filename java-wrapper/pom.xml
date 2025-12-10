@@ -7,7 +7,7 @@
 
     <groupId>org.tanzu.claudecode</groupId>
     <artifactId>claude-code-cf-wrapper</artifactId>
-    <version>1.1.0</version>
+    <version>1.1.1</version>
     <packaging>jar</packaging>
 
     <name>Claude Code Cloud Foundry Wrapper</name>
