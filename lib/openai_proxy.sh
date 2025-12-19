@@ -237,15 +237,24 @@ if ! python3 -c "import litellm" 2>/dev/null; then
 fi
 
 echo "LiteLLM module found, starting proxy server..."
+
+# First, try to get LiteLLM version to ensure it's working
+echo "Testing LiteLLM installation..."
+python3 -m litellm --version 2>&1 || echo "Warning: Could not get LiteLLM version"
+
 echo "Executing: python3 -m litellm.proxy.proxy_server --config \$CONFIG_FILE --host \$HOST --port \$PORT --detailed_debug"
 
-# Start LiteLLM proxy server (exec replaces this script with the Python process)
-# Health checking is done by the Java LiteLlmProxyManager
-exec python3 -m litellm.proxy.proxy_server \\
+# Try to run the command directly first to see the actual error
+python3 -m litellm.proxy.proxy_server \\
     --config "\$CONFIG_FILE" \\
     --host "\$HOST" \\
     --port "\$PORT" \\
     --detailed_debug 2>&1
+
+# If we get here, the Python process exited
+EXIT_CODE=\$?
+echo "LiteLLM proxy exited with code: \$EXIT_CODE" >&2
+exit \$EXIT_CODE
 EOF
 
     chmod +x "${startup_script}"
