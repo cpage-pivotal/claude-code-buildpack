@@ -158,7 +158,7 @@ public class LiteLlmProxyManager {
                     new InputStreamReader(process.getInputStream()))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    logger.debug("[LiteLLM stdout] {}", line);
+                    logger.info("[LiteLLM] {}", line);
                 }
             } catch (IOException e) {
                 logger.debug("LiteLLM stdout stream closed", e);
@@ -173,7 +173,7 @@ public class LiteLlmProxyManager {
                     new InputStreamReader(process.getErrorStream()))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    logger.debug("[LiteLLM stderr] {}", line);
+                    logger.warn("[LiteLLM ERROR] {}", line);
                 }
             } catch (IOException e) {
                 logger.debug("LiteLLM stderr stream closed", e);
@@ -195,16 +195,20 @@ public class LiteLlmProxyManager {
         
         long startTime = System.currentTimeMillis();
         long maxWaitMs = MAX_STARTUP_WAIT_SECONDS * 1000L;
+        int attempts = 0;
         
         while (System.currentTimeMillis() - startTime < maxWaitMs) {
             Process process = proxyProcess.get();
             if (process == null || !process.isAlive()) {
-                throw new IOException("LiteLLM proxy process died during startup");
+                // Process died - check exit code
+                int exitCode = process != null ? process.exitValue() : -1;
+                throw new IOException("LiteLLM proxy process died during startup with exit code: " + exitCode);
             }
             
+            attempts++;
             if (checkHealth(healthUrl)) {
                 long elapsedMs = System.currentTimeMillis() - startTime;
-                logger.info("LiteLLM proxy is ready! (took {}ms)", elapsedMs);
+                logger.info("LiteLLM proxy is ready! (took {}ms after {} health check attempts)", elapsedMs, attempts);
                 return;
             }
             
@@ -217,7 +221,7 @@ public class LiteLlmProxyManager {
         }
         
         throw new IOException("LiteLLM proxy failed to become healthy within " + 
-                             MAX_STARTUP_WAIT_SECONDS + " seconds");
+                             MAX_STARTUP_WAIT_SECONDS + " seconds (tried " + attempts + " times)");
     }
     
     /**
