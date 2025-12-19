@@ -238,9 +238,9 @@ fi
 
 echo "LiteLLM module found, starting proxy server..."
 
-# First, try to get LiteLLM version to ensure it's working
-echo "Testing LiteLLM installation..."
-python3 -m litellm --version 2>&1 || echo "Warning: Could not get LiteLLM version"
+# First, try to get LiteLLM proxy help to ensure it's working
+echo "Testing LiteLLM proxy server module..."
+python3 -m litellm.proxy.proxy_server --help 2>&1 | head -n 20 || echo "Warning: Could not get proxy help"
 
 echo "Executing: python3 -m litellm.proxy.proxy_server --config \$CONFIG_FILE --host \$HOST --port \$PORT --detailed_debug"
 
