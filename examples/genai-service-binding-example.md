@@ -27,7 +27,7 @@ This example demonstrates zero-configuration OpenAI provider mode using automati
     <dependency>
         <groupId>io.pivotal.cfenv</groupId>
         <artifactId>java-cfenv-boot</artifactId>
-        <version>3.1.5</version>
+        <version>3.5.0</version>
     </dependency>
     
     <!-- Spring Boot Starter Web -->
@@ -99,18 +99,20 @@ public class ChatController {
 }
 ```
 
-### 4. Configure Spring Boot (Optional)
+### 4. Enable OpenAI Provider Mode in Buildpack
 
-**src/main/resources/application.yml:**
+**src/main/resources/.claude-code-config.yml:**
 ```yaml
-# No configuration needed! The ClaudeCodeGenAICfEnvProcessor
-# automatically detects bound GenAI services and configures everything.
+# Enable OpenAI provider mode so the buildpack installs LiteLLM during staging
+use-openai-provider: true
 
 # Optional: enable the built-in Claude Code REST API
 claude-code:
   enabled: true
   controller-enabled: true
 ```
+
+**Note:** This tells the buildpack to install LiteLLM during staging. The actual OpenAI credentials (base-url, api-key, model) are automatically configured at runtime from the bound GenAI service.
 
 ### 5. Deploy to Cloud Foundry
 
@@ -141,13 +143,25 @@ cf push
 
 ## How It Works
 
-1. **Service Binding Detection**: When the application starts, `ClaudeCodeGenAICfEnvProcessor` scans `VCAP_SERVICES`
-2. **Automatic Configuration**: If a GenAI service with `chat` capability is found, it automatically:
-   - Extracts `api_base`, `api_key`, and `model_name` from credentials
+1. **Buildpack Staging**: 
+   - Detects `.claude-code-config.yml` with `use-openai-provider: true`
+   - Installs Python and LiteLLM proxy components
+   - Creates proxy startup script at `$DEPS_DIR/{index}/bin/start-litellm-proxy.sh`
+
+2. **Service Binding Detection**: 
+   - When the application starts, `ClaudeCodeGenAICfEnvProcessor` scans `VCAP_SERVICES`
+   - Extracts `api_base`, `api_key`, and `model_name` from bound GenAI service credentials
+
+3. **Automatic Configuration**: 
    - Sets `claude-code.use-openai-provider=true`
-   - Configures `claude-code.openai.*` properties
-3. **Buildpack Integration**: During staging, the buildpack detects OpenAI provider mode and installs LiteLLM
-4. **Runtime Routing**: At runtime, Claude CLI requests are routed through LiteLLM to your GenAI service
+   - Configures `claude-code.openai.*` properties from service credentials
+
+4. **Proxy Startup**: 
+   - `ClaudeCodeExecutorImpl` starts the LiteLLM proxy on-demand with the configured credentials
+   - Proxy translates Anthropic API calls to OpenAI format
+
+5. **Runtime Routing**: 
+   - Claude CLI requests are routed through LiteLLM to your GenAI service
 
 ## Verifying the Configuration
 
@@ -190,16 +204,16 @@ curl -X POST https://genai-chat-demo.apps.example.com/api/chat \
 
 The automatic detection works with any service that:
 - Has tag `genai` or label starting with `genai`
-- Has `model_capabilities` including `chat`
-- Provides credentials with:
-  - `api_base` or `endpoint.api_base`
-  - `api_key` or `endpoint.api_key`
-  - `model_name` or `endpoint.name`
+- AND meets one of these criteria:
+  - Has `model_capabilities` including `chat`, OR
+  - Has `api_base` in credentials (flat or nested `endpoint` structure)
 
-Examples:
-- Tanzu Platform GenAI
-- Custom OpenAI-compatible services exposed via User-Provided Services
-- Third-party GenAI service brokers
+This covers:
+- **Tanzu Platform GenAI** - Automatically detected via nested `endpoint` structure
+- **Custom OpenAI-compatible services** - Exposed via Cloud Foundry User-Provided Services
+- **Third-party GenAI service brokers** - Any broker that follows the GenAI service conventions
+
+**Note**: The `model_capabilities` field is optional. If your service has an `api_base` endpoint, it will be detected automatically.
 
 ## Alternative: Manual Configuration
 
@@ -209,15 +223,14 @@ If you prefer explicit configuration over automatic detection, see the main [Jav
 
 ### LiteLLM not installed during staging
 
-**Check:** Does your GenAI service have the correct tags and capabilities?
+**Cause:** The `.claude-code-config.yml` file is missing or doesn't have `use-openai-provider: true`.
 
-```bash
-cf service chat-llm
+**Solution:** Ensure you have `src/main/resources/.claude-code-config.yml` with:
+```yaml
+use-openai-provider: true
 ```
 
-Look for:
-- Tags: `genai`, `llm`
-- Check credentials structure matches expected format
+**Why:** `VCAP_SERVICES` is not available during staging, so the buildpack can't detect service bindings at build time. The `use-openai-provider` flag tells the buildpack to install LiteLLM, and the actual credentials are configured at runtime from the bound service.
 
 ### Provider not detected at runtime
 

@@ -813,8 +813,8 @@ cf restage my-app
 ```
 
 **Requirements:**
-- Add `java-cfenv-boot` dependency to your application
-- Bind a service tagged with `genai` and having `chat` capability
+
+1. **Add `java-cfenv-boot` dependency** to enable `VCAP_SERVICES` processing:
 
 ```xml
 <dependency>
@@ -824,12 +824,24 @@ cf restage my-app
 </dependency>
 ```
 
+2. **Enable OpenAI provider mode in buildpack** by creating `.claude-code-config.yml`:
+
+```yaml
+# src/main/resources/.claude-code-config.yml
+use-openai-provider: true
+```
+
+**Why this is needed:** `VCAP_SERVICES` (service bindings) are only available at runtime, not during staging. The `use-openai-provider` flag tells the buildpack to install LiteLLM during staging, and the actual credentials are automatically configured at runtime from the bound service.
+
+3. **Bind a GenAI service** tagged with `genai` and having `chat` capability or an `api_base` endpoint
+
 **What happens automatically:**
-1. `ClaudeCodeGenAICfEnvProcessor` detects the bound GenAI service
-2. Extracts `api_base`, `api_key`, and `model_name` from `VCAP_SERVICES`
-3. Configures `claude-code.openai.*` properties
-4. Buildpack installs LiteLLM proxy during staging
-5. Runtime routes Claude CLI through the proxy to your GenAI service
+1. **During staging:** Buildpack detects `use-openai-provider: true` and installs LiteLLM proxy
+2. **At runtime:** `ClaudeCodeGenAICfEnvProcessor` detects the bound GenAI service
+3. Extracts `api_base`, `api_key`, and `model_name` from `VCAP_SERVICES`
+4. Configures `claude-code.openai.*` properties
+5. Starts LiteLLM proxy on-demand with the configured credentials
+6. Routes Claude CLI through the proxy to your GenAI service
 
 **Supported credential structures:**
 ```json

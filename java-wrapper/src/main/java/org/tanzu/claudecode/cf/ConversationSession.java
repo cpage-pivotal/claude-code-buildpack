@@ -8,6 +8,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
@@ -348,32 +349,43 @@ public class ConversationSession implements AutoCloseable {
         
         ProcessBuilder pb = new ProcessBuilder(command);
 
-        // Set up environment variables - support both API key and OAuth token
-        String apiKey = System.getenv("ANTHROPIC_API_KEY");
-        String oauthToken = System.getenv("CLAUDE_CODE_OAUTH_TOKEN");
-
-        // At least one must be set
-        if ((apiKey == null || apiKey.isEmpty()) && (oauthToken == null || oauthToken.isEmpty())) {
-            throw new IllegalStateException(
-                "Neither ANTHROPIC_API_KEY nor CLAUDE_CODE_OAUTH_TOKEN environment variable is set"
-            );
-        }
-
-        // Pass both if available (Claude CLI will use whichever is set)
-        if (apiKey != null && !apiKey.isEmpty()) {
-            pb.environment().put("ANTHROPIC_API_KEY", apiKey);
-        }
-        if (oauthToken != null && !oauthToken.isEmpty()) {
-            pb.environment().put("CLAUDE_CODE_OAUTH_TOKEN", oauthToken);
+        // Set up environment variables
+        // Use environment from options (which includes base environment from executor)
+        // This supports both Anthropic mode and OpenAI provider mode
+        Map<String, String> env = pb.environment();
+        env.putAll(options.getAdditionalEnv());
+        
+        // Check that we have authentication configured
+        // In Anthropic mode: ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN
+        // In OpenAI mode: ANTHROPIC_AUTH_TOKEN (which is actually the OpenAI key)
+        boolean hasAuth = env.containsKey("ANTHROPIC_API_KEY") 
+            || env.containsKey("CLAUDE_CODE_OAUTH_TOKEN")
+            || env.containsKey("ANTHROPIC_AUTH_TOKEN");
+        
+        if (!hasAuth) {
+            // Fall back to system environment as last resort
+            String apiKey = System.getenv("ANTHROPIC_API_KEY");
+            String oauthToken = System.getenv("CLAUDE_CODE_OAUTH_TOKEN");
+            
+            if ((apiKey == null || apiKey.isEmpty()) && (oauthToken == null || oauthToken.isEmpty())) {
+                throw new IllegalStateException(
+                    "Neither ANTHROPIC_API_KEY nor CLAUDE_CODE_OAUTH_TOKEN environment variable is set"
+                );
+            }
+            
+            // Pass system environment variables
+            if (apiKey != null && !apiKey.isEmpty()) {
+                env.put("ANTHROPIC_API_KEY", apiKey);
+            }
+            if (oauthToken != null && !oauthToken.isEmpty()) {
+                env.put("CLAUDE_CODE_OAUTH_TOKEN", oauthToken);
+            }
         }
 
         String home = System.getenv("HOME");
         if (home != null && !home.isEmpty()) {
-            pb.environment().put("HOME", home);
+            env.put("HOME", home);
         }
-        
-        // Add additional environment variables from options
-        pb.environment().putAll(options.getAdditionalEnv());
         
         // Set working directory if specified
         if (options.getWorkingDirectory() != null && !options.getWorkingDirectory().isEmpty()) {

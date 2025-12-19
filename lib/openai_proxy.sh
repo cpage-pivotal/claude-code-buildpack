@@ -258,21 +258,10 @@ export PATH="\$DEPS_DIR/${index}/python/bin:\$PATH"
 # Set Python path for LiteLLM libraries
 export PYTHONPATH="\$DEPS_DIR/${index}/lib/python:\$PYTHONPATH"
 
-# LiteLLM proxy startup script
-export LITELLM_STARTUP_SCRIPT="\$DEPS_DIR/${index}/bin/start-litellm-proxy.sh"
-
-# If OpenAI provider mode is enabled, start LiteLLM proxy
-if [ "\$CLAUDE_CODE_USE_OPENAI_PROVIDER" = "true" ] || [ -n "\$LITELLM_OPENAI_BASE_URL" ]; then
-    echo "OpenAI provider mode detected, starting LiteLLM proxy..."
-    
-    # Start LiteLLM proxy in background
-    nohup "\$LITELLM_STARTUP_SCRIPT" > /tmp/litellm.log 2>&1 &
-    
-    # Give it a moment to start
-    sleep 2
-    
-    echo "LiteLLM proxy startup initiated. Check /tmp/litellm.log for details."
-fi
+# NOTE: The LiteLLM proxy is started on-demand by the Java wrapper
+# when OpenAI provider mode is detected via VCAP_SERVICES or configuration.
+# The proxy startup script is available at:
+#   \$DEPS_DIR/${index}/bin/start-litellm-proxy.sh
 EOF
 
     echo "       OpenAI environment configuration added to profile"

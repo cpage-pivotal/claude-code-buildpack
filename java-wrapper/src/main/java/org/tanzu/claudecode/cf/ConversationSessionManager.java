@@ -106,12 +106,15 @@ public class ConversationSessionManager {
     private final ScheduledExecutorService cleanupExecutor;
     private final Duration inactivityTimeout;
     private volatile boolean isShutdown = false;
+    
+    // Base environment variables to pass to sessions (includes OpenAI provider config if enabled)
+    private final Map<String, String> baseEnvironment;
 
     /**
      * Creates a new session manager with default inactivity timeout (30 minutes).
      */
     public ConversationSessionManager() {
-        this(DEFAULT_INACTIVITY_TIMEOUT);
+        this(DEFAULT_INACTIVITY_TIMEOUT, Collections.emptyMap());
     }
 
     /**
@@ -125,12 +128,32 @@ public class ConversationSessionManager {
      * @throws IllegalArgumentException if inactivityTimeout is null or negative
      */
     public ConversationSessionManager(Duration inactivityTimeout) {
+        this(inactivityTimeout, Collections.emptyMap());
+    }
+
+    /**
+     * Creates a new session manager with custom inactivity timeout and base environment.
+     * <p>
+     * The cleanup task will run every 5 minutes to check for and remove
+     * sessions that have been inactive longer than the specified timeout.
+     * </p>
+     * <p>
+     * The base environment variables are passed to all sessions created by this manager.
+     * This allows OpenAI provider configuration to be propagated to conversation sessions.
+     * </p>
+     *
+     * @param inactivityTimeout the maximum duration of inactivity before session expiration
+     * @param baseEnvironment base environment variables to pass to all sessions
+     * @throws IllegalArgumentException if inactivityTimeout is null or negative
+     */
+    public ConversationSessionManager(Duration inactivityTimeout, Map<String, String> baseEnvironment) {
         if (inactivityTimeout == null || inactivityTimeout.isNegative() || inactivityTimeout.isZero()) {
             throw new IllegalArgumentException("Inactivity timeout must be positive");
         }
 
         this.inactivityTimeout = inactivityTimeout;
         this.sessions = new ConcurrentHashMap<>();
+        this.baseEnvironment = baseEnvironment != null ? new HashMap<>(baseEnvironment) : Collections.emptyMap();
         
         // Create cleanup executor with daemon thread
         this.cleanupExecutor = Executors.newScheduledThreadPool(1, r -> {
@@ -190,8 +213,30 @@ public class ConversationSessionManager {
         
         ensureNotShutdown();
         
+        // Merge base environment with additional environment from options
+        Map<String, String> sessionEnv = new HashMap<>(baseEnvironment);
+        sessionEnv.putAll(options.getAdditionalEnv());
+        
+        // Create options with merged environment
+        ClaudeCodeOptions.Builder optionsBuilder = ClaudeCodeOptions.builder()
+            .timeout(options.getTimeout())
+            .model(options.getModel())
+            .dangerouslySkipPermissions(options.isDangerouslySkipPermissions())
+            .env(sessionEnv);
+        
+        // Only set optional fields if provided
+        if (options.getWorkingDirectory() != null && !options.getWorkingDirectory().isEmpty()) {
+            optionsBuilder.workingDirectory(options.getWorkingDirectory());
+        }
+        
+        if (options.getSessionInactivityTimeout() != null) {
+            optionsBuilder.sessionInactivityTimeout(options.getSessionInactivityTimeout());
+        }
+        
+        ClaudeCodeOptions sessionOptions = optionsBuilder.build();
+        
         // Create new session
-        ConversationSession session = new ConversationSession(options);
+        ConversationSession session = new ConversationSession(sessionOptions);
         String sessionId = session.getSessionId();
         
         // Store session

@@ -136,6 +136,13 @@ public class ClaudeCodeExecutorImpl implements ClaudeCodeExecutor {
             this.baseEnvironment = buildOpenAiEnvironment(openaiConfig);
             logger.info("Initialized ClaudeCodeExecutor with OpenAI-compatible provider: model={}, baseUrl={}", 
                        openaiConfig.getModel(), openaiConfig.getBaseUrl());
+            
+            // Start LiteLLM proxy on-demand
+            try {
+                LiteLlmProxyManager.ensureProxyStarted(baseEnvironment);
+            } catch (java.io.IOException e) {
+                throw new IllegalStateException("Failed to start LiteLLM proxy for OpenAI provider mode", e);
+            }
         } else {
             this.openaiConfig = null;
             
@@ -532,7 +539,8 @@ public class ClaudeCodeExecutorImpl implements ClaudeCodeExecutor {
                     } else {
                         logger.info("Initializing conversation session manager with custom timeout: {}", timeout);
                     }
-                    sessionManager = new ConversationSessionManager(timeout);
+                    // Pass baseEnvironment to session manager so it can propagate to sessions
+                    sessionManager = new ConversationSessionManager(timeout, baseEnvironment);
                 }
             }
         }
@@ -686,6 +694,12 @@ public class ClaudeCodeExecutorImpl implements ClaudeCodeExecutor {
         String home = System.getenv("HOME");
         if (home != null && !home.isEmpty()) {
             env.put("HOME", home);
+        }
+        
+        // Pass DEPS_DIR (needed for proxy startup script location)
+        String depsDir = System.getenv("DEPS_DIR");
+        if (depsDir != null && !depsDir.isEmpty()) {
+            env.put("DEPS_DIR", depsDir);
         }
 
         // Pass NODE_EXTRA_CA_CERTS if set (for Cloud Foundry SSL)

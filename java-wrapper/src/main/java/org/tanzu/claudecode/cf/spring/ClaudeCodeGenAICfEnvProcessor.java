@@ -11,7 +11,7 @@ import java.util.Map;
 /**
  * Automatically configures Claude Code to use a bound GenAI service as an OpenAI-compatible provider.
  * <p>
- * When a GenAI service with 'chat' capability is bound to the application, this processor:
+ * When a GenAI service is bound to the application, this processor:
  * </p>
  * <ul>
  *   <li>Enables OpenAI provider mode in the Claude Code buildpack</li>
@@ -22,6 +22,15 @@ import java.util.Map;
  * This allows seamless integration with Tanzu Platform GenAI services or any
  * OpenAI-compatible endpoint exposed via VCAP_SERVICES.
  * </p>
+ * <h2>Service Detection</h2>
+ * <p>
+ * The processor accepts services that meet the following criteria:
+ * </p>
+ * <ul>
+ *   <li>Tagged with "genai" or labeled starting with "genai"</li>
+ *   <li>Have "chat" in model_capabilities (if present), OR</li>
+ *   <li>Have an api_base in credentials (flat or nested endpoint structure)</li>
+ * </ul>
  * <h2>Usage</h2>
  * <p>
  * Simply bind a GenAI service to your application and the processor will automatically
@@ -60,6 +69,16 @@ import java.util.Map;
  *     }
  *   }
  * }
+ * 
+ * // With model_capabilities (optional)
+ * {
+ *   "credentials": {
+ *     "model_capabilities": ["chat"],
+ *     "api_base": "https://...",
+ *     "api_key": "...",
+ *     "model_name": "..."
+ *   }
+ * }
  * </pre>
  *
  * @author Claude Code Buildpack Team
@@ -75,15 +94,33 @@ public class ClaudeCodeGenAICfEnvProcessor implements CfEnvProcessor {
         boolean isGenAIService = service.existsByTagIgnoreCase("genai") 
             || service.existsByLabelStartsWith("genai");
         
-        if (isGenAIService) {
-            // Only accept if the service has chat capability
-            @SuppressWarnings("unchecked")
-            ArrayList<String> modelCapabilities = (ArrayList<String>) 
-                service.getCredentials().getMap().get("model_capabilities");
-            return (modelCapabilities != null && modelCapabilities.contains("chat"));
+        if (!isGenAIService) {
+            return false;
         }
         
-        return false;
+        // Check if model_capabilities exists and contains "chat"
+        @SuppressWarnings("unchecked")
+        ArrayList<String> modelCapabilities = (ArrayList<String>) 
+            service.getCredentials().getMap().get("model_capabilities");
+        
+        if (modelCapabilities != null) {
+            // If model_capabilities is present, it must contain "chat"
+            return modelCapabilities.contains("chat");
+        }
+        
+        // If model_capabilities is not present, check if we have the required endpoint structure
+        // This handles Tanzu Platform GenAI services that may not expose model_capabilities
+        @SuppressWarnings("unchecked")
+        Map<String, Object> endpoint = (Map<String, Object>) 
+            service.getCredentials().getMap().get("endpoint");
+        
+        // Accept if we have an endpoint with api_base (indicates it's a chat-capable service)
+        if (endpoint != null && endpoint.get("api_base") != null) {
+            return true;
+        }
+        
+        // Also accept if we have api_base directly in credentials (flat structure)
+        return service.getCredentials().getString("api_base") != null;
     }
 
     @Override
