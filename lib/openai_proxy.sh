@@ -252,17 +252,36 @@ cat "\$CONFIG_FILE"
 
 echo "Attempting to start LiteLLM proxy server..."
 
-# Try running directly first to capture any errors
-python3 -m litellm.proxy.proxy_server \\
-    --config "\$CONFIG_FILE" \\
-    --host "\$HOST" \\
-    --port "\$PORT" \\
-    --detailed_debug 2>&1
-
-# If we get here, the command exited
-EXIT_CODE=\$?
-echo "LiteLLM proxy exited with code: \$EXIT_CODE" >&2
-exit \$EXIT_CODE
+# Check if the litellm command is available in PATH
+if command -v litellm >/dev/null 2>&1; then
+    echo "Using litellm CLI command"
+    echo "Executing: litellm --config \$CONFIG_FILE --host \$HOST --port \$PORT --detailed_debug"
+    
+    # Run the litellm CLI
+    litellm \\
+        --config "\$CONFIG_FILE" \\
+        --host "\$HOST" \\
+        --port "\$PORT" \\
+        --detailed_debug 2>&1
+    
+    EXIT_CODE=\$?
+    echo "LiteLLM proxy exited with code: \$EXIT_CODE" >&2
+    exit \$EXIT_CODE
+else
+    echo "litellm CLI not found, trying Python module..."
+    echo "Executing: python3 -m litellm --config \$CONFIG_FILE --host \$HOST --port \$PORT --detailed_debug"
+    
+    # Try running with python -m litellm (the main litellm module)
+    python3 -m litellm \\
+        --config "\$CONFIG_FILE" \\
+        --host "\$HOST" \\
+        --port "\$PORT" \\
+        --detailed_debug 2>&1
+    
+    EXIT_CODE=\$?
+    echo "LiteLLM proxy exited with code: \$EXIT_CODE" >&2
+    exit \$EXIT_CODE
+fi
 EOF
 
     chmod +x "${startup_script}"
