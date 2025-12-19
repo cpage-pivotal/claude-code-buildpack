@@ -17,6 +17,7 @@ This buildpack installs the Claude Code CLI and Node.js runtime into your Cloud 
 - 📦 Public Maven repository (GCP Artifact Registry) ✅
 - 📡 Real-time streaming output support
 - 💾 Intelligent caching for faster builds
+- 🔄 **OpenAI-compatible LLM support** - Use GPT-4, Ollama, vLLM, or any OpenAI-compatible endpoint ✅
 
 ## Quick Start
 
@@ -778,6 +779,161 @@ For comprehensive Skills documentation, see:
 - **[SKILLS.md](SKILLS.md)** - Complete Skills configuration guide
 - [Claude Skills Documentation](https://code.claude.com/docs/en/skills)
 - [Agent Skills Best Practices](https://docs.claude.com/en/docs/agents-and-tools/agent-skills/best-practices)
+
+## OpenAI-Compatible LLM Support
+
+The buildpack supports using OpenAI-compatible LLMs as an alternative to Anthropic's Claude models. This allows you to use models like GPT-4, Ollama, vLLM, or any OpenAI-compatible endpoint while still leveraging the Claude Code CLI's powerful agentic capabilities.
+
+### How It Works
+
+When OpenAI provider mode is enabled:
+
+1. The buildpack installs a **LiteLLM proxy** alongside the Claude CLI
+2. The Java wrapper configures Claude CLI to send requests to the local LiteLLM proxy
+3. LiteLLM translates Anthropic API format (used by Claude CLI) to OpenAI format
+4. Your OpenAI-compatible endpoint receives standard OpenAI API calls
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  Claude CLI     │ --> │  LiteLLM Proxy  │ --> │  OpenAI LLM     │
+│ (Anthropic API) │     │  (Translation)  │     │  (OpenAI API)   │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+```
+
+### Configuration
+
+#### Option 1: Using Spring Boot application.yml
+
+Configure OpenAI provider in your `application.yml`:
+
+```yaml
+claude-code:
+  enabled: true
+  use-openai-provider: true
+  openai:
+    base-url: https://api.openai.com/v1
+    api-key: ${OPENAI_API_KEY}
+    model: gpt-4o
+    proxy-port: 4000  # Optional, default: 4000
+```
+
+#### Option 2: Using Environment Variables
+
+Set environment variables in your `manifest.yml`:
+
+```yaml
+applications:
+  - name: my-java-app
+    buildpacks:
+      - nodejs_buildpack
+      - https://github.com/your-org/claude-code-buildpack
+      - java_buildpack
+    env:
+      CLAUDE_CODE_USE_OPENAI_PROVIDER: true
+      LITELLM_OPENAI_BASE_URL: https://api.openai.com/v1
+      LITELLM_OPENAI_API_KEY: ${OPENAI_API_KEY}
+      LITELLM_OPENAI_MODEL: gpt-4o
+      LITELLM_PORT: 4000
+```
+
+### Supported OpenAI-Compatible Endpoints
+
+| Provider | Base URL | Notes |
+|----------|----------|-------|
+| **OpenAI** | `https://api.openai.com/v1` | Official OpenAI API |
+| **Azure OpenAI** | `https://{resource}.openai.azure.com` | Azure-hosted OpenAI |
+| **Ollama** | `http://localhost:11434/v1` | Local Ollama server |
+| **vLLM** | `http://localhost:8000/v1` | vLLM inference server |
+| **Together AI** | `https://api.together.xyz/v1` | Together AI platform |
+| **Anyscale** | `https://api.endpoints.anyscale.com/v1` | Anyscale endpoints |
+
+### Java Wrapper Configuration
+
+The Java wrapper automatically detects OpenAI provider configuration:
+
+```java
+import org.tanzu.claudecode.cf.ClaudeCodeExecutor;
+import org.springframework.beans.factory.annotation.Autowired;
+
+@Service
+public class MyService {
+    @Autowired
+    private ClaudeCodeExecutor executor;
+
+    public String analyze(String code) {
+        // Works the same whether using Anthropic or OpenAI provider
+        return executor.execute("Analyze this code: " + code);
+    }
+}
+```
+
+Check which provider is being used:
+
+```java
+import org.tanzu.claudecode.cf.ClaudeCodeExecutorImpl;
+
+ClaudeCodeExecutorImpl executor = (ClaudeCodeExecutorImpl) claudeCodeExecutor;
+if (executor.isUsingOpenAiProvider()) {
+    var config = executor.getOpenAiConfig();
+    System.out.println("Using OpenAI model: " + config.getModel());
+} else {
+    System.out.println("Using Anthropic Claude");
+}
+```
+
+### Trade-offs and Considerations
+
+1. **Additional Dependencies**: OpenAI mode requires Python runtime (~50MB) for LiteLLM proxy
+2. **Latency**: Extra proxy hop adds ~10-50ms per request
+3. **Feature Parity**: Some Claude-specific features may not translate perfectly to OpenAI models:
+   - Extended thinking may behave differently
+   - Tool use syntax has slight variations
+   - Streaming output may have minor differences
+4. **Model Capabilities**: OpenAI models may produce different results than Claude for the same prompts
+
+### Troubleshooting OpenAI Provider Mode
+
+#### LiteLLM Proxy Not Starting
+
+Check the proxy logs:
+
+```bash
+cf ssh my-app -c "cat /tmp/litellm.log"
+```
+
+Common issues:
+- Missing environment variables (`LITELLM_OPENAI_*`)
+- Port conflict (change `proxy-port` if 4000 is in use)
+- Python installation issues
+
+#### API Connection Errors
+
+Verify your OpenAI endpoint is reachable:
+
+```bash
+cf ssh my-app -c "curl -I $LITELLM_OPENAI_BASE_URL/models"
+```
+
+Check that the API key is set:
+
+```bash
+cf env my-app | grep LITELLM_OPENAI_API_KEY
+```
+
+#### Verifying OpenAI Mode is Active
+
+Check the startup logs:
+
+```bash
+cf logs my-app --recent | grep -i "openai\|litellm"
+```
+
+You should see:
+```
+OpenAI provider mode detected, starting LiteLLM proxy...
+LiteLLM proxy startup initiated.
+Initialized ClaudeCodeExecutor with OpenAI-compatible provider: model=gpt-4o
+```
 
 ## Development
 

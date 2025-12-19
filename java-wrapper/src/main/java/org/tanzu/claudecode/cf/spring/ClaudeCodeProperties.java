@@ -13,7 +13,18 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *   cli-path: /path/to/claude
  *   api-key: sk-ant-xxxxx
  *   controller-enabled: true
+ *   # OpenAI-compatible LLM settings (optional)
+ *   use-openai-provider: false
+ *   openai:
+ *     base-url: https://api.openai.com/v1
+ *     api-key: sk-xxxxx
+ *     model: gpt-4o
  * </pre>
+ * <p>
+ * When {@code use-openai-provider} is true, the buildpack will use an OpenAI-compatible
+ * LLM instead of Anthropic's Claude. This requires a LiteLLM proxy to translate between
+ * Anthropic API format (used by Claude CLI) and OpenAI API format.
+ * </p>
  *
  * @author Claude Code Buildpack Team
  * @since 1.0.0
@@ -56,6 +67,20 @@ public class ClaudeCodeProperties {
      * Default: true
      */
     private boolean controllerEnabled = true;
+
+    /**
+     * Whether to use an OpenAI-compatible LLM provider instead of Anthropic.
+     * When enabled, requires openai.base-url, openai.api-key, and openai.model to be set.
+     * A LiteLLM proxy will be used to translate between Anthropic and OpenAI API formats.
+     * Default: false
+     */
+    private boolean useOpenaiProvider = false;
+
+    /**
+     * OpenAI-compatible LLM configuration settings.
+     * Only used when use-openai-provider is true.
+     */
+    private OpenAiConfig openai = new OpenAiConfig();
 
     /**
      * Returns whether Claude Code integration is enabled.
@@ -168,6 +193,183 @@ public class ClaudeCodeProperties {
      */
     public void setControllerEnabled(boolean controllerEnabled) {
         this.controllerEnabled = controllerEnabled;
+    }
+
+    /**
+     * Returns whether to use an OpenAI-compatible LLM provider.
+     *
+     * @return true if OpenAI provider should be used
+     */
+    public boolean isUseOpenaiProvider() {
+        return useOpenaiProvider;
+    }
+
+    /**
+     * Sets whether to use an OpenAI-compatible LLM provider.
+     *
+     * @param useOpenaiProvider true to use OpenAI provider
+     */
+    public void setUseOpenaiProvider(boolean useOpenaiProvider) {
+        this.useOpenaiProvider = useOpenaiProvider;
+    }
+
+    /**
+     * Returns the OpenAI configuration.
+     *
+     * @return the OpenAI configuration
+     */
+    public OpenAiConfig getOpenai() {
+        return openai;
+    }
+
+    /**
+     * Sets the OpenAI configuration.
+     *
+     * @param openai the OpenAI configuration
+     */
+    public void setOpenai(OpenAiConfig openai) {
+        this.openai = openai;
+    }
+
+    /**
+     * Checks if OpenAI provider is properly configured.
+     * Returns true if use-openai-provider is enabled and all required OpenAI settings are present.
+     *
+     * @return true if OpenAI provider is fully configured
+     */
+    public boolean isOpenaiProviderConfigured() {
+        if (!useOpenaiProvider) {
+            return false;
+        }
+        return openai != null 
+            && openai.getBaseUrl() != null && !openai.getBaseUrl().isEmpty()
+            && openai.getApiKey() != null && !openai.getApiKey().isEmpty()
+            && openai.getModel() != null && !openai.getModel().isEmpty();
+    }
+
+    /**
+     * Nested configuration class for OpenAI-compatible LLM settings.
+     * <p>
+     * These settings map to Spring AI OpenAI properties:
+     * </p>
+     * <ul>
+     *   <li>{@code base-url} maps to {@code spring.ai.openai.base-url}</li>
+     *   <li>{@code api-key} maps to {@code spring.ai.openai.api-key}</li>
+     *   <li>{@code model} maps to {@code spring.ai.openai.chat.options.model}</li>
+     * </ul>
+     */
+    public static class OpenAiConfig {
+
+        /**
+         * Base URL for the OpenAI-compatible API endpoint.
+         * Examples: https://api.openai.com/v1, http://localhost:11434/v1 (Ollama)
+         */
+        private String baseUrl;
+
+        /**
+         * API key for authenticating with the OpenAI-compatible endpoint.
+         */
+        private String apiKey;
+
+        /**
+         * Model name to use with the OpenAI-compatible endpoint.
+         * Examples: gpt-4o, gpt-4o-mini, llama3.2
+         */
+        private String model;
+
+        /**
+         * Port for the local LiteLLM proxy server.
+         * Default: 4000
+         */
+        private int proxyPort = 4000;
+
+        /**
+         * Constructs a new OpenAiConfig with default values.
+         */
+        public OpenAiConfig() {
+        }
+
+        /**
+         * Returns the base URL for the OpenAI-compatible API.
+         *
+         * @return the base URL
+         */
+        public String getBaseUrl() {
+            return baseUrl;
+        }
+
+        /**
+         * Sets the base URL for the OpenAI-compatible API.
+         *
+         * @param baseUrl the base URL
+         */
+        public void setBaseUrl(String baseUrl) {
+            this.baseUrl = baseUrl;
+        }
+
+        /**
+         * Returns the API key for the OpenAI-compatible endpoint.
+         *
+         * @return the API key
+         */
+        public String getApiKey() {
+            return apiKey;
+        }
+
+        /**
+         * Sets the API key for the OpenAI-compatible endpoint.
+         *
+         * @param apiKey the API key
+         */
+        public void setApiKey(String apiKey) {
+            this.apiKey = apiKey;
+        }
+
+        /**
+         * Returns the model name for the OpenAI-compatible endpoint.
+         *
+         * @return the model name
+         */
+        public String getModel() {
+            return model;
+        }
+
+        /**
+         * Sets the model name for the OpenAI-compatible endpoint.
+         *
+         * @param model the model name
+         */
+        public void setModel(String model) {
+            this.model = model;
+        }
+
+        /**
+         * Returns the port for the local LiteLLM proxy server.
+         *
+         * @return the proxy port
+         */
+        public int getProxyPort() {
+            return proxyPort;
+        }
+
+        /**
+         * Sets the port for the local LiteLLM proxy server.
+         *
+         * @param proxyPort the proxy port
+         */
+        public void setProxyPort(int proxyPort) {
+            this.proxyPort = proxyPort;
+        }
+
+        @Override
+        public String toString() {
+            return "OpenAiConfig{" +
+                    "baseUrl='" + baseUrl + '\'' +
+                    ", apiKey='" + (apiKey != null ? "[REDACTED]" : "null") + '\'' +
+                    ", model='" + model + '\'' +
+                    ", proxyPort=" + proxyPort +
+                    '}';
+        }
     }
 }
 

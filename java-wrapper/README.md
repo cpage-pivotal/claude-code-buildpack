@@ -11,6 +11,7 @@ A Java library for seamless integration of Claude Code CLI in Cloud Foundry appl
 - ✅ **Best Practices** - Follows Cloud Foundry and ProcessBuilder best practices
 - ✅ **Comprehensive Error Handling** - Detailed exception information and logging
 - ✅ **Production Ready** - Timeouts, resource cleanup, and security considerations
+- ✅ **OpenAI-Compatible LLMs** - Use GPT-4, Ollama, vLLM, or any OpenAI-compatible endpoint
 
 ## Requirements
 
@@ -179,6 +180,58 @@ Or `application.properties`:
 claude-code.enabled=true
 claude-code.controller-enabled=true
 ```
+
+### OpenAI-Compatible LLM Configuration
+
+Use OpenAI-compatible models (GPT-4, Ollama, vLLM, etc.) instead of Anthropic Claude:
+
+```yaml
+claude-code:
+  enabled: true
+  use-openai-provider: true
+  openai:
+    base-url: https://api.openai.com/v1
+    api-key: ${OPENAI_API_KEY}
+    model: gpt-4o
+    proxy-port: 4000  # Optional, default: 4000
+```
+
+The wrapper automatically:
+1. Detects OpenAI provider configuration
+2. Sets up environment variables for the LiteLLM proxy
+3. Routes Claude CLI requests through the translation proxy
+
+Check which provider is active:
+
+```java
+@Service
+public class MyService {
+    @Autowired
+    private ClaudeCodeExecutor executor;
+
+    public void checkProvider() {
+        if (executor instanceof ClaudeCodeExecutorImpl impl) {
+            if (impl.isUsingOpenAiProvider()) {
+                var config = impl.getOpenAiConfig();
+                System.out.println("Using OpenAI model: " + config.getModel());
+                System.out.println("Base URL: " + config.getBaseUrl());
+            } else {
+                System.out.println("Using Anthropic Claude");
+            }
+        }
+    }
+}
+```
+
+**Supported OpenAI-Compatible Endpoints:**
+
+| Provider | Base URL |
+|----------|----------|
+| OpenAI | `https://api.openai.com/v1` |
+| Azure OpenAI | `https://{resource}.openai.azure.com` |
+| Ollama | `http://localhost:11434/v1` |
+| vLLM | `http://localhost:8000/v1` |
+| Together AI | `https://api.together.xyz/v1` |
 
 ## REST API Endpoints
 
@@ -537,6 +590,19 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 - **Buildpack**: See main [README.md](../README.md) for buildpack documentation
 
 ## Changelog
+
+### 1.2.0 (2025-12-18)
+
+- Added OpenAI-compatible LLM provider support
+- New configuration properties: `use-openai-provider`, `openai.base-url`, `openai.api-key`, `openai.model`
+- New methods: `isUsingOpenAiProvider()`, `getOpenAiConfig()`
+- LiteLLM proxy integration for API translation
+- Support for GPT-4, Ollama, vLLM, and other OpenAI-compatible endpoints
+
+### 1.1.1 (2025-12-01)
+
+- Bug fixes and improvements
+- OAuth token authentication support
 
 ### 1.0.0 (2025-11-23)
 

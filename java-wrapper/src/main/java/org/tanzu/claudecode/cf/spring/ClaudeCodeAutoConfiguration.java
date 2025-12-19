@@ -74,6 +74,10 @@ public class ClaudeCodeAutoConfiguration {
      *   <li>Required environment variables are present</li>
      *   <li>No custom ClaudeCodeExecutor bean is defined</li>
      * </ul>
+     * <p>
+     * If OpenAI provider mode is configured ({@code claude-code.use-openai-provider=true}),
+     * the executor will use a LiteLLM proxy to translate between Anthropic and OpenAI API formats.
+     * </p>
      *
      * @param properties the configuration properties
      * @return a ClaudeCodeExecutor instance
@@ -84,11 +88,19 @@ public class ClaudeCodeAutoConfiguration {
     public ClaudeCodeExecutor claudeCodeExecutor(ClaudeCodeProperties properties) {
         logger.info("Configuring Claude Code CLI integration");
         
+        // Check for OpenAI provider mode
+        if (properties.isOpenaiProviderConfigured()) {
+            logger.info("Creating ClaudeCodeExecutor with OpenAI-compatible provider: model={}", 
+                       properties.getOpenai().getModel());
+            return new ClaudeCodeExecutorImpl(properties);
+        }
+        
+        // Standard Anthropic provider mode
         String cliPath = properties.getCliPath();
         String apiKey = properties.getApiKey();
         
         if (cliPath != null && !cliPath.isEmpty() && apiKey != null && !apiKey.isEmpty()) {
-            logger.info("Creating ClaudeCodeExecutor with explicit configuration");
+            logger.info("Creating ClaudeCodeExecutor with explicit Anthropic configuration");
             return new ClaudeCodeExecutorImpl(cliPath, apiKey);
         } else {
             logger.info("Creating ClaudeCodeExecutor with environment variables");

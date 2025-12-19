@@ -22,6 +22,7 @@ source "${BP_DIR}/lib/environment.sh"
 source "${BP_DIR}/lib/installer.sh"
 source "${BP_DIR}/lib/validator.sh"
 source "${BP_DIR}/lib/claude_configurator.sh"
+source "${BP_DIR}/lib/openai_proxy.sh"
 
 # Create necessary directories
 mkdir -p "${DEPS_INDEX_DIR}/bin"
@@ -120,6 +121,12 @@ configure_claude_code "${BUILD_DIR}"
 
 # Configure Claude Skills
 configure_skills "${BUILD_DIR}" "${CACHE_DIR}"
+
+# Check if OpenAI provider mode is enabled and install LiteLLM if needed
+if is_openai_provider_enabled "${BUILD_DIR}"; then
+    echo "       OpenAI provider mode detected"
+    install_openai_provider_support "${DEPS_INDEX_DIR}" "${CACHE_DIR}" "${BUILD_DIR}" "${INDEX}"
+fi
 
 # Verify installation
 echo "       Verifying installation..."

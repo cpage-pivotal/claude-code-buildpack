@@ -2,6 +2,7 @@ package org.tanzu.claudecode.cf;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.tanzu.claudecode.cf.spring.ClaudeCodeProperties;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -60,6 +61,9 @@ public class ClaudeCodeExecutorImpl implements ClaudeCodeExecutor {
     private final String claudePath;
     private final Map<String, String> baseEnvironment;
     
+    // OpenAI provider configuration (null if using Anthropic)
+    private final ClaudeCodeProperties.OpenAiConfig openaiConfig;
+    
     // Lazy-initialized conversation session manager
     private volatile ConversationSessionManager sessionManager;
 
@@ -78,6 +82,7 @@ public class ClaudeCodeExecutorImpl implements ClaudeCodeExecutor {
     public ClaudeCodeExecutorImpl() {
         this.claudePath = getRequiredEnv("CLAUDE_CLI_PATH");
         this.baseEnvironment = buildBaseEnvironment();
+        this.openaiConfig = null;
         
         logger.info("Initialized ClaudeCodeExecutor with CLI path: {}", maskPath(claudePath));
     }
@@ -99,8 +104,73 @@ public class ClaudeCodeExecutorImpl implements ClaudeCodeExecutor {
         
         this.claudePath = claudePath;
         this.baseEnvironment = buildEnvironment(apiKey);
+        this.openaiConfig = null;
         
         logger.info("Initialized ClaudeCodeExecutor with explicit configuration");
+    }
+
+    /**
+     * Constructs a new executor from Spring configuration properties.
+     * <p>
+     * This constructor supports both Anthropic and OpenAI-compatible LLM providers.
+     * When {@code properties.isUseOpenaiProvider()} is true, the executor will be
+     * configured to use an OpenAI-compatible endpoint via a LiteLLM proxy.
+     * </p>
+     *
+     * @param properties the configuration properties
+     * @throws IllegalArgumentException if required configuration is missing
+     */
+    public ClaudeCodeExecutorImpl(ClaudeCodeProperties properties) {
+        Objects.requireNonNull(properties, "Properties cannot be null");
+        
+        // Get CLI path from properties or environment
+        String cliPath = properties.getCliPath();
+        if (cliPath == null || cliPath.isEmpty()) {
+            cliPath = getRequiredEnv("CLAUDE_CLI_PATH");
+        }
+        this.claudePath = cliPath;
+        
+        // Check if OpenAI provider mode is enabled and configured
+        if (properties.isOpenaiProviderConfigured()) {
+            this.openaiConfig = properties.getOpenai();
+            this.baseEnvironment = buildOpenAiEnvironment(openaiConfig);
+            logger.info("Initialized ClaudeCodeExecutor with OpenAI-compatible provider: model={}, baseUrl={}", 
+                       openaiConfig.getModel(), openaiConfig.getBaseUrl());
+        } else {
+            this.openaiConfig = null;
+            
+            // Use standard Anthropic configuration
+            String apiKey = properties.getApiKey();
+            String oauthToken = properties.getOauthToken();
+            
+            if ((apiKey == null || apiKey.isEmpty()) && (oauthToken == null || oauthToken.isEmpty())) {
+                throw new IllegalStateException(
+                    "Neither API key nor OAuth token is configured. Set claude-code.api-key, " +
+                    "claude-code.oauth-token, ANTHROPIC_API_KEY, or CLAUDE_CODE_OAUTH_TOKEN"
+                );
+            }
+            
+            this.baseEnvironment = buildEnvironment(apiKey, oauthToken);
+            logger.info("Initialized ClaudeCodeExecutor with Anthropic provider");
+        }
+    }
+
+    /**
+     * Returns whether this executor is configured to use an OpenAI-compatible provider.
+     *
+     * @return true if using OpenAI provider, false if using Anthropic
+     */
+    public boolean isUsingOpenAiProvider() {
+        return openaiConfig != null;
+    }
+
+    /**
+     * Returns the OpenAI configuration if using OpenAI provider, null otherwise.
+     *
+     * @return the OpenAI configuration or null
+     */
+    public ClaudeCodeProperties.OpenAiConfig getOpenAiConfig() {
+        return openaiConfig;
     }
 
     @Override
@@ -268,15 +338,26 @@ public class ClaudeCodeExecutorImpl implements ClaudeCodeExecutor {
                 return false;
             }
             
-            // Check if API key or OAuth token is set
-            String apiKey = baseEnvironment.get("ANTHROPIC_API_KEY");
-            String oauthToken = baseEnvironment.get("CLAUDE_CODE_OAUTH_TOKEN");
-            if ((apiKey == null || apiKey.isEmpty()) && (oauthToken == null || oauthToken.isEmpty())) {
-                logger.warn("Neither ANTHROPIC_API_KEY nor CLAUDE_CODE_OAUTH_TOKEN is set");
-                return false;
+            // Check authentication based on provider mode
+            if (openaiConfig != null) {
+                // OpenAI provider mode - check for ANTHROPIC_AUTH_TOKEN (which holds OpenAI key)
+                String authToken = baseEnvironment.get("ANTHROPIC_AUTH_TOKEN");
+                if (authToken == null || authToken.isEmpty()) {
+                    logger.warn("ANTHROPIC_AUTH_TOKEN not set for OpenAI provider mode");
+                    return false;
+                }
+                logger.debug("Claude Code CLI is available (OpenAI provider mode)");
+            } else {
+                // Standard Anthropic mode - check for API key or OAuth token
+                String apiKey = baseEnvironment.get("ANTHROPIC_API_KEY");
+                String oauthToken = baseEnvironment.get("CLAUDE_CODE_OAUTH_TOKEN");
+                if ((apiKey == null || apiKey.isEmpty()) && (oauthToken == null || oauthToken.isEmpty())) {
+                    logger.warn("Neither ANTHROPIC_API_KEY nor CLAUDE_CODE_OAUTH_TOKEN is set");
+                    return false;
+                }
+                logger.debug("Claude Code CLI is available (Anthropic provider mode)");
             }
             
-            logger.debug("Claude Code CLI is available");
             return true;
             
         } catch (Exception e) {
@@ -546,6 +627,60 @@ public class ClaudeCodeExecutorImpl implements ClaudeCodeExecutor {
         if (oauthToken != null && !oauthToken.isEmpty()) {
             env.put("CLAUDE_CODE_OAUTH_TOKEN", oauthToken);
         }
+
+        // Pass HOME directory (needed for .claude.json)
+        String home = System.getenv("HOME");
+        if (home != null && !home.isEmpty()) {
+            env.put("HOME", home);
+        }
+
+        // Pass NODE_EXTRA_CA_CERTS if set (for Cloud Foundry SSL)
+        String nodeCaCerts = System.getenv("NODE_EXTRA_CA_CERTS");
+        if (nodeCaCerts != null && !nodeCaCerts.isEmpty()) {
+            env.put("NODE_EXTRA_CA_CERTS", nodeCaCerts);
+        }
+
+        return env;
+    }
+
+    /**
+     * Build environment variables for OpenAI-compatible LLM provider.
+     * <p>
+     * Maps Spring AI OpenAI properties to Anthropic environment variables that
+     * tell the Claude CLI to use a LiteLLM proxy for API translation:
+     * </p>
+     * <ul>
+     *   <li>{@code ANTHROPIC_BASE_URL} - Points to local LiteLLM proxy</li>
+     *   <li>{@code ANTHROPIC_AUTH_TOKEN} - OpenAI API key (passed through proxy)</li>
+     *   <li>{@code ANTHROPIC_MODEL} - Model name for the proxy to use</li>
+     *   <li>{@code LITELLM_OPENAI_BASE_URL} - Actual OpenAI-compatible endpoint</li>
+     *   <li>{@code LITELLM_OPENAI_API_KEY} - API key for OpenAI endpoint</li>
+     *   <li>{@code LITELLM_OPENAI_MODEL} - Model to use with OpenAI endpoint</li>
+     * </ul>
+     *
+     * @param config the OpenAI configuration
+     * @return environment variables for OpenAI provider mode
+     */
+    private Map<String, String> buildOpenAiEnvironment(ClaudeCodeProperties.OpenAiConfig config) {
+        Map<String, String> env = new HashMap<>();
+
+        // Point Claude CLI to local LiteLLM proxy
+        // The proxy will translate Anthropic API calls to OpenAI format
+        String proxyUrl = "http://localhost:" + config.getProxyPort();
+        env.put("ANTHROPIC_BASE_URL", proxyUrl);
+        
+        // Use OpenAI API key as the auth token (proxy will forward it)
+        env.put("ANTHROPIC_AUTH_TOKEN", config.getApiKey());
+        
+        // Set model name - this tells the proxy which model to use
+        env.put("ANTHROPIC_MODEL", config.getModel());
+        
+        // LiteLLM proxy configuration variables
+        // These are read by the proxy startup script to configure LiteLLM
+        env.put("LITELLM_OPENAI_BASE_URL", config.getBaseUrl());
+        env.put("LITELLM_OPENAI_API_KEY", config.getApiKey());
+        env.put("LITELLM_OPENAI_MODEL", config.getModel());
+        env.put("LITELLM_PORT", String.valueOf(config.getProxyPort()));
 
         // Pass HOME directory (needed for .claude.json)
         String home = System.getenv("HOME");
