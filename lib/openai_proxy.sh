@@ -241,13 +241,22 @@ echo "LiteLLM module found, starting proxy server..."
 echo "Starting LiteLLM proxy server..."
 echo "Executing: python3 -m litellm.proxy.proxy_server --config \$CONFIG_FILE --host \$HOST --port \$PORT --detailed_debug"
 
+# Verify config file exists and is readable
+if [ ! -r "\$CONFIG_FILE" ]; then
+    echo "ERROR: Config file not readable: \$CONFIG_FILE" >&2
+    exit 1
+fi
+
+echo "Config file contents:"
+cat "\$CONFIG_FILE"
+
 # Use exec to replace this shell with the Python process
 # This allows Java to monitor the actual Python process lifecycle
 exec python3 -m litellm.proxy.proxy_server \\
     --config "\$CONFIG_FILE" \\
     --host "\$HOST" \\
     --port "\$PORT" \\
-    --detailed_debug
+    --detailed_debug 2>&1
 EOF
 
     chmod +x "${startup_script}"

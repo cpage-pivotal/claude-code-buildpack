@@ -193,6 +193,14 @@ public class LiteLlmProxyManager {
         
         logger.info("Waiting for LiteLLM proxy to be ready at {}...", healthUrl);
         
+        // Give the process a moment to actually start before we begin health checks
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted during initial startup delay", e);
+        }
+        
         long startTime = System.currentTimeMillis();
         long maxWaitMs = MAX_STARTUP_WAIT_SECONDS * 1000L;
         int attempts = 0;
