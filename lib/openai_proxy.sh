@@ -250,13 +250,19 @@ fi
 echo "Config file contents:"
 cat "\$CONFIG_FILE"
 
-# Use exec to replace this shell with the Python process
-# This allows Java to monitor the actual Python process lifecycle
-exec python3 -m litellm.proxy.proxy_server \\
+echo "Attempting to start LiteLLM proxy server..."
+
+# Try running directly first to capture any errors
+python3 -m litellm.proxy.proxy_server \\
     --config "\$CONFIG_FILE" \\
     --host "\$HOST" \\
     --port "\$PORT" \\
     --detailed_debug 2>&1
+
+# If we get here, the command exited
+EXIT_CODE=\$?
+echo "LiteLLM proxy exited with code: \$EXIT_CODE" >&2
+exit \$EXIT_CODE
 EOF
 
     chmod +x "${startup_script}"
