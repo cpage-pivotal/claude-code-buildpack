@@ -238,23 +238,49 @@ fi
 
 echo "LiteLLM module found, starting proxy server..."
 
-# First, try to get LiteLLM proxy help to ensure it's working
-echo "Testing LiteLLM proxy server module..."
-python3 -m litellm.proxy.proxy_server --help 2>&1 | head -n 20 || echo "Warning: Could not get proxy help"
+# Test if we can actually import the proxy server module
+echo "Testing if litellm.proxy.proxy_server module exists..."
+python3 -c "from litellm.proxy import proxy_server; print('proxy_server module found'); print(dir(proxy_server))" 2>&1 | head -n 10
 
-echo "Executing: python3 -m litellm.proxy.proxy_server --config \$CONFIG_FILE --host \$HOST --port \$PORT --detailed_debug"
+echo "Testing litellm.proxy.cli module..."
+python3 -c "import litellm.proxy.cli; print('cli module found')" 2>&1
 
-# Try to run the command directly first to see the actual error
-python3 -m litellm.proxy.proxy_server \\
-    --config "\$CONFIG_FILE" \\
-    --host "\$HOST" \\
-    --port "\$PORT" \\
-    --detailed_debug 2>&1
-
-# If we get here, the Python process exited
-EXIT_CODE=\$?
-echo "LiteLLM proxy exited with code: \$EXIT_CODE" >&2
-exit \$EXIT_CODE
+echo "Attempting to start proxy using litellm CLI command..."
+# Try using the litellm command directly instead of python -m
+if command -v litellm >/dev/null 2>&1; then
+    echo "litellm command found, using it..."
+    litellm --config "\$CONFIG_FILE" --host "\$HOST" --port "\$PORT" --detailed_debug 2>&1 &
+    PROXY_PID=\$!
+    echo "LiteLLM started with PID: \$PROXY_PID"
+    # Let it run in background
+    exit 0
+else
+    echo "litellm command not found, trying python module..."
+    echo "Executing: python3 -m litellm.proxy.proxy_server --config \$CONFIG_FILE --host \$HOST --port \$PORT --detailed_debug"
+    
+    # Run in background with explicit output capture
+    python3 -m litellm.proxy.proxy_server \\
+        --config "\$CONFIG_FILE" \\
+        --host "\$HOST" \\
+        --port "\$PORT" \\
+        --detailed_debug 2>&1 &
+    
+    PROXY_PID=\$!
+    echo "Python process started with PID: \$PROXY_PID"
+    
+    # Wait a moment to see if it crashes immediately
+    sleep 2
+    
+    if kill -0 \$PROXY_PID 2>/dev/null; then
+        echo "Process is still running, exiting script"
+        exit 0
+    else
+        wait \$PROXY_PID
+        EXIT_CODE=\$?
+        echo "Process died immediately with exit code: \$EXIT_CODE" >&2
+        exit \$EXIT_CODE
+    fi
+fi
 EOF
 
     chmod +x "${startup_script}"
