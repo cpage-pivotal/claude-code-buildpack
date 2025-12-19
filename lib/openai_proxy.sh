@@ -209,6 +209,21 @@ if [ ! -f "\$CONFIG_FILE" ]; then
     exit 1
 fi
 
+echo "Config file found, checking Python..."
+echo "Python path: \$(which python3)"
+echo "Python version: \$(python3 --version 2>&1)"
+echo "PYTHONPATH: \$PYTHONPATH"
+
+# Test if litellm module is available
+if ! python3 -c "import litellm" 2>/dev/null; then
+    echo "ERROR: LiteLLM module not found in Python path" >&2
+    echo "Python sys.path:" >&2
+    python3 -c "import sys; print('\\n'.join(sys.path))" >&2
+    exit 1
+fi
+
+echo "LiteLLM module found, starting proxy server..."
+
 # Start LiteLLM proxy server (exec replaces this script with the Python process)
 # Health checking is done by the Java LiteLlmProxyManager
 exec python3 -m litellm.proxy.proxy_server \\
