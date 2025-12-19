@@ -1,2 +1,2 @@
-org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
-org.tanzu.claudecode.cf.spring.ClaudeCodeAutoConfiguration
+io.pivotal.cfenv.spring.boot.CfEnvProcessor=\
+  org.tanzu.claudecode.cf.spring.ClaudeCodeGenAICfEnvProcessor

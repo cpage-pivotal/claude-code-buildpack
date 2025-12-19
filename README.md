@@ -802,9 +802,61 @@ When OpenAI provider mode is enabled:
 
 ### Configuration
 
-#### Option 1: Using Spring Boot application.yml
+#### Option 1: Automatic GenAI Service Detection (Recommended for Cloud Foundry)
 
-Configure OpenAI provider in your `application.yml`:
+The simplest way to use OpenAI-compatible LLMs is to bind a GenAI service. The buildpack automatically detects and configures it:
+
+```bash
+# Bind a GenAI service (e.g., Tanzu Platform GenAI)
+cf bind-service my-app chat-llm
+cf restage my-app
+```
+
+**Requirements:**
+- Add `java-cfenv-boot` dependency to your application
+- Bind a service tagged with `genai` and having `chat` capability
+
+```xml
+<dependency>
+    <groupId>io.pivotal.cfenv</groupId>
+    <artifactId>java-cfenv-boot</artifactId>
+    <version>3.1.5</version>
+</dependency>
+```
+
+**What happens automatically:**
+1. `ClaudeCodeGenAICfEnvProcessor` detects the bound GenAI service
+2. Extracts `api_base`, `api_key`, and `model_name` from `VCAP_SERVICES`
+3. Configures `claude-code.openai.*` properties
+4. Buildpack installs LiteLLM proxy during staging
+5. Runtime routes Claude CLI through the proxy to your GenAI service
+
+**Supported credential structures:**
+```json
+// Flat structure
+{
+  "credentials": {
+    "api_base": "https://...",
+    "api_key": "...",
+    "model_name": "..."
+  }
+}
+
+// Nested endpoint structure (Tanzu Platform GenAI)
+{
+  "credentials": {
+    "endpoint": {
+      "api_base": "https://...",
+      "api_key": "...",
+      "name": "..."
+    }
+  }
+}
+```
+
+#### Option 2: Manual Configuration via application.yml
+
+Configure OpenAI provider explicitly in your `application.yml`:
 
 ```yaml
 claude-code:
@@ -817,7 +869,7 @@ claude-code:
     proxy-port: 4000  # Optional, default: 4000
 ```
 
-#### Option 2: Using Environment Variables
+#### Option 3: Using Environment Variables
 
 Set environment variables in your `manifest.yml`:
 
@@ -838,14 +890,15 @@ applications:
 
 ### Supported OpenAI-Compatible Endpoints
 
-| Provider | Base URL | Notes |
-|----------|----------|-------|
-| **OpenAI** | `https://api.openai.com/v1` | Official OpenAI API |
-| **Azure OpenAI** | `https://{resource}.openai.azure.com` | Azure-hosted OpenAI |
-| **Ollama** | `http://localhost:11434/v1` | Local Ollama server |
-| **vLLM** | `http://localhost:8000/v1` | vLLM inference server |
-| **Together AI** | `https://api.together.xyz/v1` | Together AI platform |
-| **Anyscale** | `https://api.endpoints.anyscale.com/v1` | Anyscale endpoints |
+| Provider | Base URL | Configuration Method |
+|----------|----------|---------------------|
+| **Tanzu Platform GenAI** | Auto-detected | Service binding (Option 1) |
+| **OpenAI** | `https://api.openai.com/v1` | Manual or service binding |
+| **Azure OpenAI** | `https://{resource}.openai.azure.com` | Manual configuration |
+| **Ollama** | `http://localhost:11434/v1` | Manual configuration |
+| **vLLM** | `http://localhost:8000/v1` | Manual configuration |
+| **Together AI** | `https://api.together.xyz/v1` | Manual configuration |
+| **Anyscale** | `https://api.endpoints.anyscale.com/v1` | Manual configuration |
 
 ### Java Wrapper Configuration
 

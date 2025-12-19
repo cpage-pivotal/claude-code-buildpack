@@ -183,7 +183,42 @@ claude-code.controller-enabled=true
 
 ### OpenAI-Compatible LLM Configuration
 
-Use OpenAI-compatible models (GPT-4, Ollama, vLLM, etc.) instead of Anthropic Claude:
+The wrapper supports OpenAI-compatible models (GPT-4, Ollama, vLLM, Tanzu Platform GenAI, etc.) as an alternative to Anthropic Claude.
+
+#### Option 1: Automatic GenAI Service Detection (Recommended for Cloud Foundry)
+
+When you bind a GenAI service to your application, the wrapper automatically detects and configures it:
+
+```bash
+# Bind a GenAI service
+cf bind-service my-app chat-llm
+cf restage my-app
+```
+
+**Requirements:**
+- Add `java-cfenv-boot` dependency (for VCAP_SERVICES processing)
+- Bind a service tagged with `genai` and having `chat` capability
+
+```xml
+<dependency>
+    <groupId>io.pivotal.cfenv</groupId>
+    <artifactId>java-cfenv-boot</artifactId>
+    <version>3.1.5</version>
+</dependency>
+```
+
+**How it works:**
+1. `ClaudeCodeGenAICfEnvProcessor` detects bound GenAI services automatically
+2. Reads `api_base`, `api_key`, and `model_name` from service credentials
+3. Configures `claude-code.openai.*` properties automatically
+4. Buildpack installs LiteLLM proxy during staging
+5. Runtime routes Claude CLI through the proxy to your GenAI service
+
+**No configuration files needed!** Just bind the service and deploy.
+
+#### Option 2: Manual Configuration
+
+For non-Cloud Foundry environments or explicit configuration:
 
 ```yaml
 claude-code:
@@ -201,7 +236,7 @@ The wrapper automatically:
 2. Sets up environment variables for the LiteLLM proxy
 3. Routes Claude CLI requests through the translation proxy
 
-Check which provider is active:
+#### Checking Which Provider is Active
 
 ```java
 @Service
@@ -223,15 +258,17 @@ public class MyService {
 }
 ```
 
-**Supported OpenAI-Compatible Endpoints:**
+#### Supported Providers
+#### Supported Providers
 
-| Provider | Base URL |
-|----------|----------|
-| OpenAI | `https://api.openai.com/v1` |
-| Azure OpenAI | `https://{resource}.openai.azure.com` |
-| Ollama | `http://localhost:11434/v1` |
-| vLLM | `http://localhost:8000/v1` |
-| Together AI | `https://api.together.xyz/v1` |
+| Provider | Base URL | Configuration |
+|----------|----------|---------------|
+| **Tanzu Platform GenAI** | Auto-detected via service binding | `cf bind-service my-app chat-llm` |
+| **OpenAI** | `https://api.openai.com/v1` | Manual config or service binding |
+| **Azure OpenAI** | `https://{resource}.openai.azure.com` | Manual config |
+| **Ollama** | `http://localhost:11434/v1` | Manual config |
+| **vLLM** | `http://localhost:8000/v1` | Manual config |
+| **Together AI** | `https://api.together.xyz/v1` | Manual config |
 
 ## REST API Endpoints
 
@@ -591,13 +628,17 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 
 ## Changelog
 
-### 1.2.0 (2025-12-18)
+### 1.2.0 (2025-12-19)
 
+- **NEW**: Automatic GenAI service detection via `ClaudeCodeGenAICfEnvProcessor`
+- **NEW**: Zero-config OpenAI provider mode when GenAI service is bound
+- **NEW**: Support for Tanzu Platform GenAI services
 - Added OpenAI-compatible LLM provider support
 - New configuration properties: `use-openai-provider`, `openai.base-url`, `openai.api-key`, `openai.model`
 - New methods: `isUsingOpenAiProvider()`, `getOpenAiConfig()`
 - LiteLLM proxy integration for API translation
 - Support for GPT-4, Ollama, vLLM, and other OpenAI-compatible endpoints
+- Handles both flat and nested credential structures from `VCAP_SERVICES`
 
 ### 1.1.1 (2025-12-01)
 
