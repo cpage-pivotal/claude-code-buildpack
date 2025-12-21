@@ -87,6 +87,7 @@ install_python() {
 install_litellm() {
     local install_dir=$1
     local cache_dir=$2
+    local index=$3
     
     # Ensure Python is in PATH
     export PATH="${install_dir}/python/bin:${PATH}"
@@ -113,6 +114,18 @@ install_litellm() {
     if [ $? -ne 0 ]; then
         echo "       WARNING: Failed to install LiteLLM CLI entry points, will use uvicorn fallback"
     fi
+    
+    # Fix shebang lines in CLI scripts to use portable path
+    # During staging, Python is in a temp directory, but at runtime it's at /home/vcap/deps/$index/python/bin
+    echo "       Fixing CLI script shebangs for runtime..."
+    local runtime_python="/home/vcap/deps/${index}/python/bin/python3"
+    for script in "${install_dir}/python/bin/"*; do
+        if [ -f "$script" ] && head -1 "$script" | grep -q "^#!.*python"; then
+            # Replace the first line with the correct runtime path
+            sed -i "1s|^#!.*python.*|#!${runtime_python}|" "$script"
+            echo "         Fixed shebang in $(basename "$script")"
+        fi
+    done
     
     echo "       LiteLLM v${LITELLM_VERSION} installed successfully"
     return 0
@@ -435,7 +448,7 @@ install_openai_provider_support() {
     
     # Install LiteLLM
     echo "       Installing LiteLLM proxy..."
-    install_litellm "${install_dir}" "${cache_dir}"
+    install_litellm "${install_dir}" "${cache_dir}" "${index}"
     if [ $? -ne 0 ]; then
         echo "       ERROR: Failed to install LiteLLM"
         return 1
