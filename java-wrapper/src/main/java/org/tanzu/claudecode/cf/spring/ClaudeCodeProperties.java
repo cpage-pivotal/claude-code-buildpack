@@ -274,8 +274,19 @@ public class ClaudeCodeProperties {
         /**
          * Model name to use with the OpenAI-compatible endpoint.
          * Examples: gpt-4o, gpt-4o-mini, llama3.2
+         * <p>
+         * If not specified and config-url is available, the model name will be
+         * discovered automatically from the Tanzu GenAI service configuration endpoint.
+         * </p>
          */
         private String model;
+
+        /**
+         * Configuration URL for discovering available models (Tanzu GenAI services).
+         * This endpoint returns metadata about the service including available model names.
+         * Example: https://genai-proxy.sys.example.com/endpoint-name/config/v1/endpoint
+         */
+        private String configUrl;
 
         /**
          * Port for the local LiteLLM proxy server.
@@ -344,6 +355,24 @@ public class ClaudeCodeProperties {
         }
 
         /**
+         * Returns the configuration URL for model discovery.
+         *
+         * @return the config URL
+         */
+        public String getConfigUrl() {
+            return configUrl;
+        }
+
+        /**
+         * Sets the configuration URL for model discovery.
+         *
+         * @param configUrl the config URL
+         */
+        public void setConfigUrl(String configUrl) {
+            this.configUrl = configUrl;
+        }
+
+        /**
          * Returns the port for the local LiteLLM proxy server.
          *
          * @return the proxy port
@@ -367,6 +396,7 @@ public class ClaudeCodeProperties {
                     "baseUrl='" + baseUrl + '\'' +
                     ", apiKey='" + (apiKey != null ? "[REDACTED]" : "null") + '\'' +
                     ", model='" + model + '\'' +
+                    ", configUrl='" + configUrl + '\'' +
                     ", proxyPort=" + proxyPort +
                     '}';
         }

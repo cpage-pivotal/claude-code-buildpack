@@ -133,6 +133,7 @@ public class ClaudeCodeGenAICfEnvProcessor implements CfEnvProcessor {
         String apiBase = getApiBase(cfCredentials);
         String apiKey = getApiKey(cfCredentials);
         String modelName = getModelName(cfCredentials);
+        String configUrl = getConfigUrl(cfCredentials);
         
         if (apiBase != null) {
             properties.put("claude-code.openai.base-url", apiBase);
@@ -144,6 +145,10 @@ public class ClaudeCodeGenAICfEnvProcessor implements CfEnvProcessor {
         
         if (modelName != null) {
             properties.put("claude-code.openai.model", modelName);
+        }
+        
+        if (configUrl != null) {
+            properties.put("claude-code.openai.config-url", configUrl);
         }
     }
 
@@ -223,26 +228,54 @@ public class ClaudeCodeGenAICfEnvProcessor implements CfEnvProcessor {
      * Tries the following paths in order:
      * </p>
      * <ol>
+     *   <li>CLAUDE_CODE_OPENAI_MODEL environment variable (explicit override)</li>
+     *   <li>credentials.model (explicit model name for the API)</li>
      *   <li>credentials.model_name (flat structure)</li>
-     *   <li>credentials.endpoint.name (nested structure - Tanzu Platform)</li>
+     *   <li>credentials.endpoint.model (explicit model name in endpoint)</li>
+     *   <li>credentials.endpoint.name (nested structure - Tanzu Platform, used as placeholder)</li>
      *   <li>credentials.name (fallback)</li>
      * </ol>
+     * <p>
+     * Note: For Tanzu Platform GenAI services, the endpoint name (e.g., "tanzu-gpt-oss-120b-presidio-v1030-c3c82b2")
+     * is different from the actual model name (e.g., "gpt-oss-120b"). If a config_url is available,
+     * the runtime will discover the actual model name from the configuration endpoint.
+     * Users can also override with CLAUDE_CODE_OPENAI_MODEL environment variable.
+     * </p>
      *
      * @param credentials the Cloud Foundry service credentials
      * @return the model name, or null if not found
      */
     private String getModelName(CfCredentials credentials) {
-        // Try direct model_name first
+        // Check environment variable override first
+        String envModel = System.getenv("CLAUDE_CODE_OPENAI_MODEL");
+        if (envModel != null && !envModel.isEmpty()) {
+            return envModel;
+        }
+        
+        // Try explicit model field first (preferred for API usage)
+        String model = credentials.getString("model");
+        if (model != null) {
+            return model;
+        }
+        
+        // Try direct model_name 
         String modelName = credentials.getString("model_name");
         if (modelName != null) {
             return modelName;
         }
         
-        // Try nested endpoint.name (Tanzu Platform GenAI format)
+        // Try nested endpoint structure
         @SuppressWarnings("unchecked")
         Map<String, Object> endpoint = (Map<String, Object>) 
             credentials.getMap().get("endpoint");
         if (endpoint != null) {
+            // Try explicit model in endpoint
+            String endpointModel = (String) endpoint.get("model");
+            if (endpointModel != null) {
+                return endpointModel;
+            }
+            
+            // Use endpoint name as placeholder - the actual model will be discovered from config_url
             String name = (String) endpoint.get("name");
             if (name != null) {
                 return name;
@@ -251,6 +284,41 @@ public class ClaudeCodeGenAICfEnvProcessor implements CfEnvProcessor {
         
         // Fall back to service name
         return credentials.getString("name");
+    }
+    
+    /**
+     * Extract configuration URL from credentials for model discovery.
+     * <p>
+     * The config_url endpoint returns metadata about the service including
+     * the actual model names available for inference requests.
+     * </p>
+     * <p>
+     * Tries the following paths in order:
+     * </p>
+     * <ol>
+     *   <li>credentials.config_url (flat structure)</li>
+     *   <li>credentials.endpoint.config_url (nested structure - Tanzu Platform)</li>
+     * </ol>
+     *
+     * @param credentials the Cloud Foundry service credentials
+     * @return the config URL, or null if not found
+     */
+    private String getConfigUrl(CfCredentials credentials) {
+        // Try direct config_url first
+        String configUrl = credentials.getString("config_url");
+        if (configUrl != null) {
+            return configUrl;
+        }
+        
+        // Try nested endpoint.config_url
+        @SuppressWarnings("unchecked")
+        Map<String, Object> endpoint = (Map<String, Object>) 
+            credentials.getMap().get("endpoint");
+        if (endpoint != null) {
+            return (String) endpoint.get("config_url");
+        }
+        
+        return null;
     }
 }
 
