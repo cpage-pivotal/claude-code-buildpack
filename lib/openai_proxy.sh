@@ -151,7 +151,8 @@ model_list:
   - model_name: "*"
     litellm_params:
       model: "openai/${LITELLM_OPENAI_MODEL}"
-      api_base: "${LITELLM_OPENAI_BASE_URL}"
+      # Note: Tanzu GenAI requires /openai suffix; LiteLLM will append /chat/completions
+      api_base: "${LITELLM_OPENAI_BASE_URL}/openai"
       api_key: "${LITELLM_OPENAI_API_KEY}"
 
 general_settings:
@@ -327,6 +328,48 @@ echo "Attempting to start LiteLLM proxy server..."
 
 # Set environment variables that LiteLLM might need
 export LITELLM_CONFIG_PATH="\$CONFIG_FILE"
+
+# Configure SSL certificates for outbound HTTPS connections
+# Cloud Foundry containers have CA certificates at /etc/ssl/certs/ca-certificates.crt
+if [ -f "/etc/ssl/certs/ca-certificates.crt" ]; then
+    export REQUESTS_CA_BUNDLE="/etc/ssl/certs/ca-certificates.crt"
+    export SSL_CERT_FILE="/etc/ssl/certs/ca-certificates.crt"
+    export CURL_CA_BUNDLE="/etc/ssl/certs/ca-certificates.crt"
+    echo "SSL certificates configured: /etc/ssl/certs/ca-certificates.crt"
+else
+    echo "WARNING: CA certificates not found at /etc/ssl/certs/ca-certificates.crt"
+fi
+
+# Test network connectivity to the OpenAI base URL
+echo ""
+echo "=== Testing network connectivity ==="
+echo "Testing connection to: \$LITELLM_OPENAI_BASE_URL"
+
+# Extract hostname from URL
+OPENAI_HOST=\$(echo "\$LITELLM_OPENAI_BASE_URL" | sed -E 's|https?://([^/:]+).*|\1|')
+echo "Hostname: \$OPENAI_HOST"
+
+# Test DNS resolution
+if command -v nslookup >/dev/null 2>&1; then
+    echo "DNS lookup:"
+    nslookup "\$OPENAI_HOST" 2>&1 | head -5 || echo "DNS lookup failed or timed out"
+elif command -v host >/dev/null 2>&1; then
+    echo "DNS lookup:"
+    host "\$OPENAI_HOST" 2>&1 | head -5 || echo "DNS lookup failed"
+else
+    echo "No DNS lookup tools available (nslookup/host)"
+fi
+
+# Test HTTPS connection with curl
+if command -v curl >/dev/null 2>&1; then
+    echo ""
+    echo "Testing HTTPS connection with curl:"
+    curl -v --max-time 5 "\$LITELLM_OPENAI_BASE_URL" 2>&1 | head -30 || echo "curl test failed or timed out"
+else
+    echo "curl not available for connectivity test"
+fi
+echo "=== END CONNECTIVITY TEST ==="
+echo ""
 
 # Method 1: Try the litellm CLI if available (preferred - handles config loading properly)
 echo "Trying Method 1: litellm CLI command"
