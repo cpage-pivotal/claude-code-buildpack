@@ -96,13 +96,22 @@ install_litellm() {
     
     echo "       Installing LiteLLM v${LITELLM_VERSION}..."
     
-    # Install LiteLLM with pip
+    # Install LiteLLM with pip to the lib/python directory for imports
     pip3 install --cache-dir="${pip_cache}" --target="${install_dir}/lib/python" \
         "litellm[proxy]==${LITELLM_VERSION}"
     
     if [ $? -ne 0 ]; then
         echo "       ERROR: Failed to install LiteLLM"
         return 1
+    fi
+    
+    # Also install to the Python directory to get CLI entry points (litellm command)
+    echo "       Installing LiteLLM CLI entry points..."
+    pip3 install --cache-dir="${pip_cache}" --prefix="${install_dir}/python" \
+        "litellm[proxy]==${LITELLM_VERSION}"
+    
+    if [ $? -ne 0 ]; then
+        echo "       WARNING: Failed to install LiteLLM CLI entry points, will use uvicorn fallback"
     fi
     
     echo "       LiteLLM v${LITELLM_VERSION} installed successfully"
@@ -306,29 +315,11 @@ echo "Attempting to start LiteLLM proxy server..."
 # Set environment variables that LiteLLM might need
 export LITELLM_CONFIG_PATH="\$CONFIG_FILE"
 
-# Method 1: Try using uvicorn directly (most reliable for FastAPI apps)
-echo "Trying Method 1: uvicorn with litellm.proxy.proxy_server:app"
-if python3 -c "import uvicorn" 2>/dev/null; then
-    echo "Starting with uvicorn..."
-    python3 -m uvicorn litellm.proxy.proxy_server:app \\
-        --host "\$HOST" \\
-        --port "\$PORT" \\
-        --log-level debug 2>&1
-    
-    EXIT_CODE=\$?
-    echo "uvicorn exited with code: \$EXIT_CODE" >&2
-    
-    if [ \$EXIT_CODE -ne 0 ]; then
-        echo "uvicorn failed, trying alternative methods..."
-    else
-        exit \$EXIT_CODE
-    fi
-fi
-
-# Method 2: Try the litellm CLI if available
-echo "Trying Method 2: litellm CLI command"
+# Method 1: Try the litellm CLI if available (preferred - handles config loading properly)
+echo "Trying Method 1: litellm CLI command"
 if command -v litellm >/dev/null 2>&1; then
     echo "Using litellm CLI command"
+    echo "Executing: litellm --config \$CONFIG_FILE --host \$HOST --port \$PORT --detailed_debug"
     litellm --config "\$CONFIG_FILE" --host "\$HOST" --port "\$PORT" --detailed_debug 2>&1
     
     EXIT_CODE=\$?
@@ -336,12 +327,35 @@ if command -v litellm >/dev/null 2>&1; then
     exit \$EXIT_CODE
 fi
 
-# Method 3: Try python -m litellm
-echo "Trying Method 3: python3 -m litellm"
+# Method 2: Try python -m litellm (also handles config loading properly)
+echo "Trying Method 2: python3 -m litellm"
+echo "Executing: python3 -m litellm --config \$CONFIG_FILE --host \$HOST --port \$PORT --detailed_debug"
 python3 -m litellm --config "\$CONFIG_FILE" --host "\$HOST" --port "\$PORT" --detailed_debug 2>&1
 
 EXIT_CODE=\$?
 echo "python -m litellm exited with code: \$EXIT_CODE" >&2
+
+# If python -m litellm failed, try uvicorn as last resort
+if [ \$EXIT_CODE -ne 0 ]; then
+    echo ""
+    echo "python -m litellm failed, trying uvicorn fallback..."
+    echo "WARNING: uvicorn may not load config properly - model list may not initialize"
+    
+    # Method 3: Try using uvicorn directly (last resort - may not load config)
+    echo "Trying Method 3: uvicorn with litellm.proxy.proxy_server:app"
+    if python3 -c "import uvicorn" 2>/dev/null; then
+        echo "Starting with uvicorn..."
+        echo "Executing: python3 -m uvicorn litellm.proxy.proxy_server:app --host \$HOST --port \$PORT --log-level debug"
+        python3 -m uvicorn litellm.proxy.proxy_server:app \\
+            --host "\$HOST" \\
+            --port "\$PORT" \\
+            --log-level debug 2>&1
+        
+        EXIT_CODE=\$?
+        echo "uvicorn exited with code: \$EXIT_CODE" >&2
+    fi
+fi
+
 exit \$EXIT_CODE
 EOF
 
