@@ -195,7 +195,7 @@ public class LiteLlmProxyManager {
         
         // Give the process a moment to actually start before we begin health checks
         try {
-            Thread.sleep(1000);
+            Thread.sleep(2000);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("Interrupted during initial startup delay", e);
@@ -214,7 +214,14 @@ public class LiteLlmProxyManager {
             }
             
             attempts++;
-            if (checkHealth(healthUrl)) {
+            
+            // Log every 10 attempts to show progress
+            if (attempts % 10 == 1) {
+                logger.info("Health check attempt {} at http://localhost:{}/health...", attempts, port);
+            }
+            
+            // Try multiple health check endpoints
+            if (checkHealthMultipleEndpoints(port)) {
                 long elapsedMs = System.currentTimeMillis() - startTime;
                 logger.info("LiteLLM proxy is ready! (took {}ms after {} health check attempts)", elapsedMs, attempts);
                 return;
@@ -228,6 +235,15 @@ public class LiteLlmProxyManager {
             }
         }
         
+        // Final debug: try to explain why we failed
+        logger.error("LiteLLM proxy health check failed after {} attempts. Checking process state...", attempts);
+        Process process = proxyProcess.get();
+        if (process != null && process.isAlive()) {
+            logger.error("Process is still running with PID: {}. The /health endpoint may be returning non-200 responses.", process.pid());
+        } else {
+            logger.error("Process has died.");
+        }
+        
         throw new IOException("LiteLLM proxy failed to become healthy within " + 
                              MAX_STARTUP_WAIT_SECONDS + " seconds (tried " + attempts + " times)");
     }
@@ -237,8 +253,7 @@ public class LiteLlmProxyManager {
      */
     private static boolean isProxyHealthy(Map<String, String> environment) {
         int port = Integer.parseInt(environment.getOrDefault("LITELLM_PORT", "4000"));
-        String healthUrl = "http://localhost:" + port + "/health";
-        return checkHealth(healthUrl);
+        return checkHealthMultipleEndpoints(port);
     }
     
     /**
@@ -249,17 +264,62 @@ public class LiteLlmProxyManager {
             URI uri = URI.create(healthUrl);
             HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
             conn.setRequestMethod("GET");
-            conn.setConnectTimeout(1000);
-            conn.setReadTimeout(1000);
+            conn.setConnectTimeout(2000);
+            conn.setReadTimeout(2000);
             
             int responseCode = conn.getResponseCode();
+            
+            // Read response body for debugging
+            String responseBody = "";
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(
+                        responseCode >= 400 ? conn.getErrorStream() : conn.getInputStream()))) {
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    sb.append(line);
+                }
+                responseBody = sb.toString();
+            } catch (Exception e) {
+                // Ignore read errors
+            }
+            
             conn.disconnect();
             
-            return responseCode == 200;
+            if (responseCode == 200) {
+                logger.debug("Health check passed: {}", responseBody);
+                return true;
+            } else {
+                logger.debug("Health check returned {}: {}", responseCode, responseBody);
+                return false;
+            }
         } catch (IOException e) {
-            // Expected during startup
+            // Connection refused is expected during startup
+            logger.trace("Health check failed: {}", e.getMessage());
             return false;
         }
+    }
+    
+    /**
+     * Checks if the proxy is healthy using multiple endpoints.
+     */
+    private static boolean checkHealthMultipleEndpoints(int port) {
+        // Try the main health endpoint first
+        if (checkHealth("http://localhost:" + port + "/health")) {
+            return true;
+        }
+        
+        // Try the liveliness endpoint
+        if (checkHealth("http://localhost:" + port + "/health/liveliness")) {
+            return true;
+        }
+        
+        // Try just the root endpoint to see if the server is responding at all
+        if (checkHealth("http://localhost:" + port + "/")) {
+            return true;
+        }
+        
+        return false;
     }
 }
 
