@@ -290,10 +290,12 @@ generate_litellm_config() {
     # These will be substituted at runtime by the startup script
     #
     # Key configuration notes for Tanzu GenAI:
-    # 1. Tanzu GenAI expects: {base_url}/openai/chat/completions (NOT /v1/chat/completions)
+    # 1. Tanzu GenAI accepts BOTH paths:
+    #    - {base_url}/openai/chat/completions
+    #    - {base_url}/openai/v1/chat/completions
     # 2. Model name in request body should be "openai/{model}" format
-    # 3. Use hosted_vllm provider - this does NOT append /v1 to the path
-    #    (openai/ provider adds /v1 which Tanzu GenAI doesn't support)
+    # 3. Use openai/ provider for proper tool calling support
+    #    The openai/ provider appends /v1 to the path, which Tanzu GenAI accepts
     # 4. Custom callback handler to flatten array-style content to strings
     cat > "${config_template}" <<'EOF'
 # LiteLLM Proxy Configuration
@@ -305,20 +307,17 @@ model_list:
   # Wildcard model: accepts any model name from Claude CLI and routes to configured OpenAI model
   - model_name: "*"
     litellm_params:
-      # Use hosted_vllm provider - this does NOT append /v1 to the api_base path
-      # This is required for Tanzu GenAI which expects /openai/chat/completions
-      # (not /openai/v1/chat/completions which the openai/ provider would produce)
+      # Use openai/ provider for proper tool calling support
+      # The openai/ provider appends /v1 to the api_base path
+      # Tanzu GenAI accepts both /openai/chat/completions AND /openai/v1/chat/completions
       # 
-      # Model name: hosted_vllm/ prefix is stripped by LiteLLM
-      # The remaining "openai/{model}" is sent in the request body
-      model: "hosted_vllm/${LITELLM_OPENAI_MODEL}"
+      # Model name format: openai/{model} is sent in the request body
+      model: "openai/${LITELLM_OPENAI_MODEL}"
       api_key: "${LITELLM_OPENAI_API_KEY}"
-      # Tanzu GenAI expects: {base_url}/openai/chat/completions
-      # hosted_vllm will append /chat/completions to this base (without /v1)
+      # Set api_base to {base_url}/openai
+      # LiteLLM openai/ provider will append /v1/chat/completions
+      # Result: {base_url}/openai/v1/chat/completions (which Tanzu GenAI accepts)
       api_base: "${LITELLM_OPENAI_BASE_URL}/openai"
-      # Set max_tokens - Tanzu GenAI seems to return "length" stop_reason with max_tokens=1
-      # This ensures we get full responses
-      max_tokens: 16384
 
 general_settings:
   # Enable Anthropic-compatible endpoint for Claude CLI
