@@ -143,7 +143,7 @@ generate_litellm_config() {
     #
     # Key configuration notes for Tanzu GenAI:
     # 1. Tanzu GenAI expects: {base_url}/openai/chat/completions (NOT /v1/chat/completions)
-    # 2. Model name in request body should include "openai/" prefix
+    # 2. Model name in request body should be "openai/{model}" format
     # 3. Use hosted_vllm provider - this does NOT append /v1 to the path
     #    (openai/ provider adds /v1 which Tanzu GenAI doesn't support)
     cat > "${config_template}" <<'EOF'
@@ -160,8 +160,9 @@ model_list:
       # This is required for Tanzu GenAI which expects /openai/chat/completions
       # (not /openai/v1/chat/completions which the openai/ provider would produce)
       # 
-      # Model name includes openai/ prefix as required by Tanzu GenAI in request body
-      model: "hosted_vllm/openai/${LITELLM_OPENAI_MODEL}"
+      # Model name: hosted_vllm/ prefix is stripped by LiteLLM
+      # The remaining "openai/{model}" is sent in the request body
+      model: "hosted_vllm/${LITELLM_OPENAI_MODEL}"
       api_key: "${LITELLM_OPENAI_API_KEY}"
       # Tanzu GenAI expects: {base_url}/openai/chat/completions
       # hosted_vllm will append /chat/completions to this base (without /v1)

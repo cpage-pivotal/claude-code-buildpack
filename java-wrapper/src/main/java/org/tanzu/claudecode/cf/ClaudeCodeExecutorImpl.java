@@ -687,7 +687,12 @@ public class ClaudeCodeExecutorImpl implements ClaudeCodeExecutor {
         // These are read by the proxy startup script to configure LiteLLM
         env.put("LITELLM_OPENAI_BASE_URL", config.getBaseUrl());
         env.put("LITELLM_OPENAI_API_KEY", config.getApiKey());
-        env.put("LITELLM_OPENAI_MODEL", config.getModel());
+        // Model name must include "openai/" prefix for Tanzu GenAI request body format
+        // e.g., "gpt-oss-120b" becomes "openai/gpt-oss-120b"
+        String modelWithPrefix = config.getModel().startsWith("openai/") 
+            ? config.getModel() 
+            : "openai/" + config.getModel();
+        env.put("LITELLM_OPENAI_MODEL", modelWithPrefix);
         env.put("LITELLM_PORT", String.valueOf(config.getProxyPort()));
 
         // Pass HOME directory (needed for .claude.json)
