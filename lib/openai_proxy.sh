@@ -131,6 +131,152 @@ install_litellm() {
     return 0
 }
 
+# Generate custom callback handler for message transformation
+generate_litellm_callback_handler() {
+    local deps_dir=$1
+    
+    local callback_file="${deps_dir}/lib/python/tanzu_genai_handler.py"
+    
+    # Create a custom callback handler that transforms message content arrays to strings
+    # This is necessary because Tanzu GenAI does NOT support the array-style content format
+    # that OpenAI technically supports and that LiteLLM may produce when translating from Anthropic
+    cat > "${callback_file}" <<'PYEOF'
+"""
+Tanzu GenAI Custom Handler for LiteLLM
+--------------------------------------
+This callback handler transforms messages before sending to the backend:
+1. Converts array-style content to simple string content
+   - Tanzu GenAI doesn't support: {"content": [{"type": "text", "text": "..."}]}
+   - Tanzu GenAI requires: {"content": "..."}
+2. Removes Anthropic-specific fields that can't be dropped by drop_params
+"""
+
+from litellm.integrations.custom_logger import CustomLogger
+from typing import Any, Optional, Literal
+import json
+
+
+class TanzuGenAIHandler(CustomLogger):
+    """Custom handler to transform requests for Tanzu GenAI compatibility."""
+    
+    def __init__(self):
+        super().__init__()
+    
+    def _flatten_content(self, content):
+        """Convert array-style content to string content."""
+        if isinstance(content, str):
+            return content
+        
+        if isinstance(content, list):
+            # Extract text from each content block and join
+            text_parts = []
+            for item in content:
+                if isinstance(item, dict):
+                    if item.get("type") == "text":
+                        text_parts.append(item.get("text", ""))
+                    elif "text" in item:
+                        text_parts.append(item.get("text", ""))
+                elif isinstance(item, str):
+                    text_parts.append(item)
+            return "".join(text_parts)
+        
+        return content
+    
+    def _clean_message(self, msg):
+        """Clean a single message, removing unsupported fields."""
+        if not isinstance(msg, dict):
+            return msg
+        
+        # Create a clean message with only supported fields
+        clean = {}
+        
+        # Copy role
+        if "role" in msg:
+            clean["role"] = msg["role"]
+        
+        # Flatten content
+        if "content" in msg:
+            clean["content"] = self._flatten_content(msg["content"])
+        
+        # Copy tool-related fields (these are supported)
+        if "tool_calls" in msg:
+            clean["tool_calls"] = msg["tool_calls"]
+        if "tool_call_id" in msg:
+            clean["tool_call_id"] = msg["tool_call_id"]
+        if "name" in msg:
+            clean["name"] = msg["name"]
+        
+        # Skip Anthropic-specific fields: cache_control, etc.
+        
+        return clean
+    
+    async def async_pre_call_hook(
+        self,
+        user_api_key_dict,
+        cache,
+        data: dict,
+        call_type: Literal[
+            "completion",
+            "text_completion",
+            "embeddings",
+            "image_generation",
+            "moderation",
+            "audio_transcription",
+        ]
+    ) -> Optional[dict]:
+        """Transform request data before sending to the LLM backend."""
+        
+        if call_type not in ["completion", "text_completion"]:
+            return data
+        
+        try:
+            # Transform messages to flatten content arrays
+            if "messages" in data and isinstance(data["messages"], list):
+                data["messages"] = [self._clean_message(msg) for msg in data["messages"]]
+                
+            # Handle system message if present at top level
+            if "system" in data:
+                system = data.get("system")
+                if isinstance(system, list):
+                    # Convert system array to string
+                    text_parts = []
+                    for item in system:
+                        if isinstance(item, dict) and item.get("type") == "text":
+                            text_parts.append(item.get("text", ""))
+                        elif isinstance(item, str):
+                            text_parts.append(item)
+                    # Add as system message at the start of messages
+                    system_text = "".join(text_parts)
+                    if system_text and "messages" in data:
+                        # Insert system message if not already present
+                        if not data["messages"] or data["messages"][0].get("role") != "system":
+                            data["messages"].insert(0, {"role": "system", "content": system_text})
+                    del data["system"]
+                elif isinstance(system, str) and "messages" in data:
+                    if not data["messages"] or data["messages"][0].get("role") != "system":
+                        data["messages"].insert(0, {"role": "system", "content": system})
+                    del data["system"]
+            
+            # Remove Anthropic-specific top-level fields
+            for key in ["metadata", "anthropic_version"]:
+                if key in data:
+                    del data[key]
+            
+        except Exception as e:
+            # Log but don't fail - let the request proceed
+            print(f"TanzuGenAIHandler: Error transforming request: {e}")
+        
+        return data
+
+
+# Create handler instance for LiteLLM to use
+tanzu_genai_handler = TanzuGenAIHandler()
+PYEOF
+
+    chmod 644 "${callback_file}"
+    echo "       Custom Tanzu GenAI callback handler generated: ${callback_file}"
+}
+
 # Generate LiteLLM configuration file
 generate_litellm_config() {
     local deps_dir=$1
@@ -146,6 +292,7 @@ generate_litellm_config() {
     # 2. Model name in request body should be "openai/{model}" format
     # 3. Use hosted_vllm provider - this does NOT append /v1 to the path
     #    (openai/ provider adds /v1 which Tanzu GenAI doesn't support)
+    # 4. Custom callback handler to flatten array-style content to strings
     cat > "${config_template}" <<'EOF'
 # LiteLLM Proxy Configuration
 # Generated by Claude Code Buildpack for OpenAI-compatible LLM support
@@ -189,6 +336,10 @@ litellm_settings:
   # Drop params not supported by the model
   # This helps when Claude CLI sends Anthropic-specific params that OpenAI doesn't support
   drop_params: true
+  
+  # Custom callback to transform messages for Tanzu GenAI compatibility
+  # This flattens array-style content to simple strings, which Tanzu GenAI requires
+  callbacks: ["tanzu_genai_handler.tanzu_genai_handler"]
 
 router_settings:
   # Single routing since we have one model
@@ -516,6 +667,10 @@ install_openai_provider_support() {
         echo "       ERROR: Failed to install LiteLLM"
         return 1
     fi
+    
+    # Generate custom callback handler for message transformation
+    echo "       Generating custom callback handler..."
+    generate_litellm_callback_handler "${install_dir}"
     
     # Generate configuration
     echo "       Generating LiteLLM configuration..."
