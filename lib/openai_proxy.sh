@@ -264,6 +264,16 @@ class TanzuGenAIHandler(CustomLogger):
                 if key in data:
                     del data[key]
             
+            # CRITICAL: Override max_tokens if it's too low
+            # Claude CLI sometimes sends max_tokens=1 for token counting requests
+            # but our proxy can't distinguish these, so we need to ensure real 
+            # requests have enough tokens to generate tool calls
+            current_max_tokens = data.get("max_tokens", 0)
+            min_max_tokens = 16384
+            if current_max_tokens < min_max_tokens:
+                data["max_tokens"] = min_max_tokens
+                print(f"TanzuGenAIHandler: Overriding max_tokens from {current_max_tokens} to {min_max_tokens}")
+            
         except Exception as e:
             # Log but don't fail - let the request proceed
             print(f"TanzuGenAIHandler: Error transforming request: {e}")
