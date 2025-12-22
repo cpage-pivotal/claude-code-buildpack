@@ -296,6 +296,7 @@ generate_litellm_config() {
     # 2. Model name in request body should be "openai/{model}" format
     # 3. Use openai/ provider for proper tool calling support
     #    The openai/ provider appends /v1 to the path, which Tanzu GenAI accepts
+    #    LiteLLM strips the "openai/" prefix when sending to the backend, so we double it
     # 4. Custom callback handler to flatten array-style content to strings
     cat > "${config_template}" <<'EOF'
 # LiteLLM Proxy Configuration
@@ -311,8 +312,10 @@ model_list:
       # The openai/ provider appends /v1 to the api_base path
       # Tanzu GenAI accepts both /openai/chat/completions AND /openai/v1/chat/completions
       # 
-      # Model name format: openai/{model} is sent in the request body
-      model: "openai/${LITELLM_OPENAI_MODEL}"
+      # IMPORTANT: LiteLLM strips the "openai/" prefix when sending to the backend
+      # So we use "openai/openai/{model}" which becomes "openai/{model}" after stripping
+      # This is required because Tanzu GenAI expects model name like "openai/gpt-oss-120b"
+      model: "openai/openai/${LITELLM_OPENAI_MODEL}"
       api_key: "${LITELLM_OPENAI_API_KEY}"
       # Set api_base to {base_url}/openai
       # LiteLLM openai/ provider will append /v1/chat/completions
