@@ -321,6 +321,11 @@ model_list:
       # LiteLLM openai/ provider will append /v1/chat/completions
       # Result: {base_url}/openai/v1/chat/completions (which Tanzu GenAI accepts)
       api_base: "${LITELLM_OPENAI_BASE_URL}/openai"
+      # Set max_tokens - some backends return very short responses without this
+      # This ensures we get full responses including tool calls
+      max_tokens: 16384
+      # Drop params not supported by the model (e.g., Anthropic-specific ones)
+      drop_params: true
 
 general_settings:
   # Enable Anthropic-compatible endpoint for Claude CLI
