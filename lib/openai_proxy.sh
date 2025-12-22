@@ -135,7 +135,9 @@ install_litellm() {
 generate_litellm_callback_handler() {
     local deps_dir=$1
     
-    local callback_file="${deps_dir}/lib/python/tanzu_genai_handler.py"
+    # Place the callback handler directly in the deps directory
+    # LiteLLM looks for callbacks relative to the config file directory or cwd
+    local callback_file="${deps_dir}/tanzu_genai_handler.py"
     
     # Create a custom callback handler that transforms message content arrays to strings
     # This is necessary because Tanzu GenAI does NOT support the array-style content format
