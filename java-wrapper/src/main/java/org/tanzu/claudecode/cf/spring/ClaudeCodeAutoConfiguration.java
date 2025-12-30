@@ -86,14 +86,31 @@ public class ClaudeCodeAutoConfiguration {
         
         String cliPath = properties.getCliPath();
         String apiKey = properties.getApiKey();
+        String oauthToken = properties.getOauthToken();
         
-        if (cliPath != null && !cliPath.isEmpty() && apiKey != null && !apiKey.isEmpty()) {
-            logger.info("Creating ClaudeCodeExecutor with explicit configuration");
-            return new ClaudeCodeExecutorImpl(cliPath, apiKey);
-        } else {
-            logger.info("Creating ClaudeCodeExecutor with environment variables");
-            return new ClaudeCodeExecutorImpl();
+        // Log configuration debug info
+        logger.debug("CLI Path configured: {}", cliPath != null && !cliPath.isEmpty());
+        logger.debug("API Key configured: {}", apiKey != null && !apiKey.isEmpty());
+        logger.debug("OAuth Token configured: {}", oauthToken != null && !oauthToken.isEmpty());
+        
+        if (cliPath != null && !cliPath.isEmpty()) {
+            // Prefer OAuth token over API key if both are set
+            String credential = null;
+            if (oauthToken != null && !oauthToken.isEmpty()) {
+                logger.info("Creating ClaudeCodeExecutor with explicit OAuth token");
+                credential = oauthToken;
+            } else if (apiKey != null && !apiKey.isEmpty()) {
+                logger.info("Creating ClaudeCodeExecutor with explicit API key");
+                credential = apiKey;
+            }
+            
+            if (credential != null) {
+                return new ClaudeCodeExecutorImpl(cliPath, credential);
+            }
         }
+        
+        logger.info("Creating ClaudeCodeExecutor with environment variables");
+        return new ClaudeCodeExecutorImpl();
     }
 
     /**

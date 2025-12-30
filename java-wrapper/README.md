@@ -11,6 +11,8 @@ A Java library for seamless integration of Claude Code CLI in Cloud Foundry appl
 - ✅ **Best Practices** - Follows Cloud Foundry and ProcessBuilder best practices
 - ✅ **Comprehensive Error Handling** - Detailed exception information and logging
 - ✅ **Production Ready** - Timeouts, resource cleanup, and security considerations
+- ✅ **Debug Diagnostics** - Enhanced logging for authentication troubleshooting
+- ✅ **OAuth Token Support** - Automatic detection and routing of OAuth vs API key authentication
 
 ## Requirements
 
@@ -46,7 +48,7 @@ Add the GCP Artifact Registry repository and dependency to your `pom.xml`:
     <dependency>
         <groupId>org.tanzu.claudecode</groupId>
         <artifactId>claude-code-cf-wrapper</artifactId>
-        <version>1.1.1</version>
+        <version>1.1.2</version>
     </dependency>
 </dependencies>
 ```
@@ -65,7 +67,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'org.tanzu.claudecode:claude-code-cf-wrapper:1.1.1'
+    implementation 'org.tanzu.claudecode:claude-code-cf-wrapper:1.1.2'
 }
 ```
 
@@ -507,6 +509,39 @@ ClaudeCodeOptions options = ClaudeCodeOptions.builder()
     .build();
 ```
 
+### Authentication Failures ("Invalid API key")
+
+**Symptoms:** 
+- Error message: "Invalid API key · Fix external API key"
+- Exit code: 1
+- Token works in other applications
+
+**Solutions:**
+
+1. **Enable debug logging** to see detailed authentication information:
+   ```yaml
+   logging:
+     level:
+       org.tanzu.claudecode.cf: DEBUG
+   ```
+
+2. **Verify token format:**
+   - OAuth tokens start with `sk-ant-oat` (note "oat" = OAuth Access Token)
+   - API keys start with `sk-ant-api`
+
+3. **Check environment variable name:**
+   - Use `CLAUDE_CODE_OAUTH_TOKEN` for OAuth tokens
+   - Use `ANTHROPIC_API_KEY` for API keys
+
+4. **Review debug output** for token detection:
+   ```
+   INFO  [...] Detected OAuth token format, using CLAUDE_CODE_OAUTH_TOKEN
+   DEBUG [...] CLAUDE_CODE_OAUTH_TOKEN: SET [type=OAUTH_TOKEN, length=48, ...]
+   INFO  [...] Using OAuth token authentication (CLAUDE_CODE_OAUTH_TOKEN)
+   ```
+
+See [OAUTH_TOKEN_DEBUG.md](OAUTH_TOKEN_DEBUG.md) for comprehensive troubleshooting guide.
+
 ### Process Hangs
 
 **Solution:** This library already implements best practices to prevent hangs. If you still experience issues:
@@ -537,6 +572,18 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 - **Buildpack**: See main [README.md](../README.md) for buildpack documentation
 
 ## Changelog
+
+### 1.1.2 (2025-12-30)
+
+- **Fixed:** OAuth token authentication issue where tokens were incorrectly set as `ANTHROPIC_API_KEY` instead of `CLAUDE_CODE_OAUTH_TOKEN`
+- **Added:** Comprehensive debug logging for authentication troubleshooting
+- **Added:** Token type detection (API key vs OAuth token) based on prefix
+- **Added:** `logAuthenticationDebugInfo()` method for detailed auth diagnostics
+- **Added:** `formatTokenDebug()` method for safe token logging without exposing values
+- **Added:** `maskCommand()` method to hide sensitive prompt content in logs
+- **Enhanced:** Spring Boot auto-configuration to properly handle OAuth tokens
+- **Documentation:** Added [OAUTH_TOKEN_DEBUG.md](OAUTH_TOKEN_DEBUG.md) troubleshooting guide
+- **Documentation:** Added [DEBUG_CHANGES_SUMMARY.md](DEBUG_CHANGES_SUMMARY.md) for developers
 
 ### 1.0.0 (2025-11-23)
 

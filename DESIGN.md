@@ -1217,7 +1217,7 @@ cf push -b nodejs_buildpack -b claude-code-buildpack -b java_buildpack
 <dependency>
     <groupId>com.claudecode</groupId>
     <artifactId>claude-code-cf-wrapper</artifactId>
-    <version>1.1.1</version>
+    <version>1.1.2</version>
 </dependency>
 
 // Application code
