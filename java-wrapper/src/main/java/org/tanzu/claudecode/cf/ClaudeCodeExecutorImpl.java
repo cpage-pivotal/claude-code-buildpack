@@ -78,15 +78,13 @@ public class ClaudeCodeExecutorImpl implements ClaudeCodeExecutor {
     public ClaudeCodeExecutorImpl() {
         this.claudePath = getRequiredEnv("CLAUDE_CLI_PATH");
         this.baseEnvironment = buildBaseEnvironment();
-        
-        logger.info("Initialized ClaudeCodeExecutor with CLI path: {}", maskPath(claudePath));
     }
 
     /**
      * Constructs a new executor with explicit configuration.
      *
      * @param claudePath path to the Claude Code CLI executable
-     * @param apiKey Anthropic API key
+     * @param apiKey Anthropic API key or OAuth token
      * @throws IllegalArgumentException if any parameter is null or empty
      */
     public ClaudeCodeExecutorImpl(String claudePath, String apiKey) {
@@ -98,9 +96,16 @@ public class ClaudeCodeExecutorImpl implements ClaudeCodeExecutor {
         }
         
         this.claudePath = claudePath;
-        this.baseEnvironment = buildEnvironment(apiKey);
-        
-        logger.info("Initialized ClaudeCodeExecutor with explicit configuration");
+        // Determine if this is an OAuth token or API key based on prefix
+        // OAuth tokens: sk-ant-oat01-* (OAuth Access Token) or claude_code_*
+        // API keys: sk-ant-api* (standard API keys without 'oat')
+        if (isOAuthToken(apiKey)) {
+            logger.info("Detected OAuth token format, using CLAUDE_CODE_OAUTH_TOKEN");
+            this.baseEnvironment = buildEnvironment(null, apiKey);
+        } else {
+            logger.info("Detected API key format, using ANTHROPIC_API_KEY");
+            this.baseEnvironment = buildEnvironment(apiKey, null);
+        }
     }
 
     @Override
@@ -524,15 +529,6 @@ public class ClaudeCodeExecutorImpl implements ClaudeCodeExecutor {
     }
 
     /**
-     * Build environment variables with explicit API key.
-     * @deprecated Use buildEnvironment(String, String) instead
-     */
-    @Deprecated
-    private Map<String, String> buildEnvironment(String apiKey) {
-        return buildEnvironment(apiKey, null);
-    }
-
-    /**
      * Build environment variables with explicit API key and/or OAuth token.
      */
     private Map<String, String> buildEnvironment(String apiKey, String oauthToken) {
@@ -585,18 +581,38 @@ public class ClaudeCodeExecutorImpl implements ClaudeCodeExecutor {
     }
 
     /**
-     * Mask sensitive path information for logging.
+     * Determine if a credential is an OAuth token or a standard API key.
+     * <p>
+     * OAuth tokens have these formats:
+     * <ul>
+     *   <li><code>sk-ant-oat01-*</code> - OAuth Access Token (the "oat" indicates OAuth)</li>
+     *   <li><code>claude_code_*</code> - Legacy OAuth token format</li>
+     * </ul>
+     * <p>
+     * Standard API keys have these formats:
+     * <ul>
+     *   <li><code>sk-ant-api*</code> - Standard API key</li>
+     *   <li><code>sk-ant-*</code> (without "oat") - Generic API key format</li>
+     * </ul>
+     *
+     * @param credential the credential to check
+     * @return true if this is an OAuth token, false if it's an API key
      */
-    private String maskPath(String path) {
-        if (path == null) {
-            return "null";
+    private boolean isOAuthToken(String credential) {
+        if (credential == null || credential.isEmpty()) {
+            return false;
         }
-        // Keep only the last part of the path for security
-        int lastSlash = path.lastIndexOf('/');
-        if (lastSlash >= 0 && lastSlash < path.length() - 1) {
-            return ".../" + path.substring(lastSlash + 1);
+        
+        // Check for OAuth token patterns
+        // sk-ant-oat01-* = OAuth Access Token (note the "oat" = OAuth Access Token)
+        if (credential.startsWith("sk-ant-oat")) {
+            return true;
         }
-        return path;
+        
+        // Legacy/alternative OAuth token format
+        return credential.startsWith("claude_code_");
+        
+        // Everything else (including sk-ant-api*) is treated as API key
     }
 
     /**
