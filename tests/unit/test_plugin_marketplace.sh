@@ -420,6 +420,42 @@ else
     assert_failure "Should parse marketplace config with default branch"
 fi
 
+# Test 21: Parse marketplace config with mcpServers section (should not confuse them)
+print_test_header "Test 21: Parse marketplace config followed by mcpServers section"
+mkdir -p "${TEST_DIR}/mixed-config-app"
+cat > "${TEST_DIR}/mixed-config-app/.claude-code-config.yml" <<'EOF'
+claudeCode:
+  enabled: true
+  pluginMarketplaces:
+    - name: my-marketplace
+      source: https://github.com/org/plugins.git
+      plugins:
+        - plugin-one
+
+  mcpServers:
+    - name: github
+      type: sse
+      url: "https://example.com/sse"
+EOF
+
+output_file="${TEST_DIR}/mixed-config-app/marketplaces.json"
+if parse_plugin_marketplaces "${TEST_DIR}/mixed-config-app/.claude-code-config.yml" "${output_file}"; then
+    # Should only find 1 marketplace, not 2 (mcpServers should not be parsed as marketplace)
+    marketplace_count=$(python3 -c "import json; data=json.load(open('${output_file}')); print(len(data))" 2>/dev/null || echo "0")
+    if [ "${marketplace_count}" = "1" ]; then
+        # Also verify the mcpServers name is NOT in the output
+        if ! grep -q '"github"' "${output_file}"; then
+            assert_success "Should not confuse mcpServers with plugin marketplaces"
+        else
+            assert_failure "Should not confuse mcpServers with plugin marketplaces (found github in output)"
+        fi
+    else
+        assert_failure "Should find exactly 1 marketplace, found ${marketplace_count}"
+    fi
+else
+    assert_failure "Should parse marketplace config with mcpServers section"
+fi
+
 # ============================================================================
 # Print summary
 # ============================================================================

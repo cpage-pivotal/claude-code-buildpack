@@ -745,6 +745,11 @@ marketplaces = []
 in_marketplaces = False
 current_marketplace = None
 in_plugins = False
+marketplaces_indent = 0  # Track indentation level of pluginMarketplaces section
+
+def get_indent(line):
+    """Get the indentation level of a line (number of leading spaces/tabs)."""
+    return len(line) - len(line.lstrip())
 
 for line in lines:
     stripped = line.strip()
@@ -756,15 +761,22 @@ for line in lines:
     # Detect start of pluginMarketplaces section
     if re.match(r'pluginMarketplaces:', stripped):
         in_marketplaces = True
+        marketplaces_indent = get_indent(line)
         continue
     
-    # Exit marketplaces section if we hit a non-indented, non-empty line
-    if in_marketplaces and line and not line.startswith((' ', '\t', '-')) and stripped:
-        in_marketplaces = False
-        # Save last marketplace
-        if current_marketplace and current_marketplace.get('name'):
-            marketplaces.append(current_marketplace)
-        break
+    # Exit marketplaces section if we hit another key at the same or lower indentation level
+    # This handles keys like mcpServers: that are siblings of pluginMarketplaces:
+    if in_marketplaces:
+        current_indent = get_indent(line)
+        # Check if this is a YAML key (contains colon) at same/lower indentation as pluginMarketplaces
+        if current_indent <= marketplaces_indent and re.match(r'\w+:', stripped) and not stripped.startswith('-'):
+            in_marketplaces = False
+            # Save last marketplace
+            if current_marketplace and current_marketplace.get('name'):
+                marketplaces.append(current_marketplace)
+                current_marketplace = None
+            # Don't break - continue processing other sections
+            continue
     
     if in_marketplaces:
         # Detect start of new marketplace entry (- name: ...)
