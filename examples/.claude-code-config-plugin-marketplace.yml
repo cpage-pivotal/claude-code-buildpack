@@ -1,0 +1,111 @@
+---
+# Example Claude Code Configuration with Plugin Marketplaces
+# This configuration demonstrates how to install plugins from git-based marketplaces
+
+claudeCode:
+  # Enable Claude Code CLI installation
+  enabled: true
+
+  # Claude Code CLI version
+  version: "latest"
+
+  # Log level for debugging marketplace installation
+  logLevel: "info"
+
+  # Plugin Marketplaces Configuration
+  # The buildpack will clone these git repositories during staging
+  # and install the specified plugins
+  #
+  # IMPORTANT: This requires network access during Cloud Foundry staging.
+  # Ensure your CF environment allows outbound git/https connections.
+  pluginMarketplaces:
+    # Example 1: Public GitHub marketplace using HTTPS
+    - name: community-plugins
+      source: https://github.com/example-org/claude-community-plugins.git
+      branch: main
+      plugins:
+        - code-reviewer       # Install the code-reviewer plugin
+        - documentation-gen   # Install the documentation-gen plugin
+
+    # Example 2: Private repository using SSH
+    # Note: Requires SSH key configuration in the CF environment
+    - name: internal-tools
+      source: git@github.com:my-company/internal-claude-plugins.git
+      branch: production
+      plugins:
+        - company-standards
+        - api-helper
+
+    # Example 3: Specific version/tag using HTTPS with credentials
+    # For private repos, use GitHub tokens in the URL or SSH
+    - name: stable-plugins
+      source: https://github.com/example-org/stable-claude-plugins.git
+      branch: v2.0.0  # Can also be a tag
+      plugins:
+        - tested-plugin
+
+  # You can also combine marketplace plugins with bundled skills
+  # Bundled Skills in .claude/skills/ are still discovered and validated
+
+  # MCP servers can be configured alongside marketplace plugins
+  mcpServers:
+    - name: filesystem
+      type: stdio
+      command: npx
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-filesystem"
+      env:
+        ALLOWED_DIRECTORIES: "/home/vcap/app,/tmp"
+
+# ========================================
+# Expected Marketplace Repository Structure
+# ========================================
+#
+# Your git marketplace repository should be organized like this:
+#
+# claude-community-plugins/
+# ├── plugins/
+# │   ├── code-reviewer/
+# │   │   ├── plugin.json       # Plugin manifest (required)
+# │   │   ├── README.md
+# │   │   └── skills/           # Skills are extracted to .claude/skills/
+# │   │       └── review-skill/
+# │   │           └── SKILL.md
+# │   └── documentation-gen/
+# │       ├── plugin.json
+# │       └── skills/
+# │           └── doc-skill/
+# │               └── SKILL.md
+# └── README.md
+#
+# Alternative structure (plugins at root level):
+#
+# claude-plugins/
+# ├── code-reviewer/
+# │   ├── plugin.json
+# │   └── skills/
+# │       └── review-skill/
+# │           └── SKILL.md
+# └── documentation-gen/
+#     ├── plugin.json
+#     └── ...
+
+# ========================================
+# Path Resolution Workaround
+# ========================================
+#
+# This buildpack includes a workaround for Claude Code issue #10113
+# (https://github.com/anthropics/claude-code/issues/10113)
+#
+# The issue: Claude Code incorrectly resolves skill paths for git-installed
+# marketplace plugins, looking in ~/.claude/plugins/marketplaces/ instead
+# of the actual git repository location.
+#
+# The workaround: During staging, the buildpack:
+# 1. Clones the marketplace repository
+# 2. Installs plugins to .claude/plugins/
+# 3. Extracts skills from plugins directly to .claude/skills/
+#
+# This ensures skills work via both auto-discovery and the Skill tool.
+

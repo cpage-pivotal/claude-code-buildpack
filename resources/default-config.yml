@@ -62,3 +62,33 @@ claudeCode:
   # - Each skill should be in its own subdirectory with a SKILL.md file
   # - Skills are automatically discovered during staging
 
+  # Plugin Marketplaces Configuration
+  # Install plugins from git-based marketplace repositories
+  # Note: Requires network access during Cloud Foundry staging for git clone
+  #
+  # pluginMarketplaces: []
+  #
+  # Example plugin marketplaces (uncomment to enable):
+  #
+  # pluginMarketplaces:
+  #   - name: my-marketplace           # Unique name for this marketplace
+  #     source: https://github.com/org/claude-plugins.git  # Git repository URL
+  #     branch: main                    # Optional: branch to clone (default: main)
+  #     plugins:                        # List of plugins to install from this marketplace
+  #       - plugin-name-1
+  #       - plugin-name-2
+  #
+  #   - name: internal-plugins
+  #     source: git@github.com:company/internal-claude-plugins.git  # SSH URL also supported
+  #     plugins:
+  #       - company-tool
+  #
+  # Plugin marketplace structure:
+  # The marketplace repository should contain plugins in one of these structures:
+  #   - plugins/<plugin-name>/plugin.json (or plugin.yml)
+  #   - <plugin-name>/plugin.json (or plugin.yml)
+  #
+  # Skills within plugins are automatically extracted to .claude/skills/
+  # This works around Claude Code issue #10113 where git marketplace skill paths
+  # are incorrectly resolved.
+
