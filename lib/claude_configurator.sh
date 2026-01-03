@@ -1165,7 +1165,8 @@ configure_plugin_marketplaces() {
     local total_plugins_installed=0
     local total_skills_extracted=0
     
-    # Process each marketplace
+    # Process each marketplace using a temp file to avoid subshell variable scope issues
+    local marketplace_list_file="${build_dir}/.claude-marketplace-list-temp.txt"
     python3 -c "
 import json
 import sys
@@ -1177,7 +1178,10 @@ for m in marketplaces:
     # Output format: name|source|branch|plugin1,plugin2,...
     plugins = ','.join(m.get('plugins', []))
     print(f\"{m.get('name', '')}|{m.get('source', '')}|{m.get('branch', 'main')}|{plugins}\")
-" 2>/dev/null | while IFS='|' read -r name source branch plugins; do
+" 2>/dev/null > "${marketplace_list_file}"
+
+    # Read from file instead of pipe to avoid subshell
+    while IFS='|' read -r name source branch plugins; do
         if [ -z "${name}" ] || [ -z "${source}" ]; then
             echo "       WARNING: Skipping invalid marketplace entry (missing name or source)"
             continue
@@ -1192,9 +1196,6 @@ for m in marketplaces:
             continue
         fi
         
-        # Validate marketplace structure
-        validate_marketplace "${marketplace_dir}"
-        
         # Install plugins
         if [ -n "${plugins}" ]; then
             # Convert comma-separated list to JSON array
@@ -1202,7 +1203,10 @@ for m in marketplaces:
             local installed=$(install_marketplace_plugins "${marketplace_dir}" "${plugins_json}" "${app_plugins_dir}")
             total_plugins_installed=$((total_plugins_installed + installed))
         fi
-    done
+    done < "${marketplace_list_file}"
+    
+    # Clean up temp file
+    rm -f "${marketplace_list_file}"
     
     # Extract skills from all installed plugins (workaround for #10113)
     if [ -d "${app_plugins_dir}" ]; then
