@@ -698,3 +698,529 @@ configure_skills() {
 
     return 0
 }
+
+# ============================================================================
+# Plugin Marketplace Configuration Functions
+# ============================================================================
+
+# Parse plugin marketplaces from YAML configuration file
+# Outputs JSON array of marketplace configurations to stdout
+# Usage: parse_plugin_marketplaces config_file output_file
+parse_plugin_marketplaces() {
+    local config_file=$1
+    local output_file=$2
+
+    if [ ! -f "${config_file}" ]; then
+        echo "[]" > "${output_file}"
+        return 1
+    fi
+
+    # Check if file has pluginMarketplaces section
+    if ! grep -qE "pluginMarketplaces:" "${config_file}"; then
+        echo "[]" > "${output_file}"
+        return 1
+    fi
+
+    # Use Python for YAML parsing
+    if command -v python3 > /dev/null 2>&1; then
+        python3 - "${config_file}" > "${output_file}" 2>/dev/null <<'PYTHON_SCRIPT'
+import sys
+import re
+import json
+
+if len(sys.argv) < 2:
+    print("[]")
+    sys.exit(0)
+
+config_file = sys.argv[1]
+
+try:
+    with open(config_file, 'r') as f:
+        lines = f.readlines()
+except Exception as e:
+    print("[]")
+    sys.exit(0)
+
+marketplaces = []
+in_marketplaces = False
+current_marketplace = None
+in_plugins = False
+marketplaces_indent = 0  # Track indentation level of pluginMarketplaces section
+
+def get_indent(line):
+    """Get the indentation level of a line (number of leading spaces/tabs)."""
+    return len(line) - len(line.lstrip())
+
+for line in lines:
+    stripped = line.strip()
+    
+    # Skip empty lines and comments
+    if not stripped or stripped.startswith('#'):
+        continue
+    
+    # Detect start of pluginMarketplaces section
+    if re.match(r'pluginMarketplaces:', stripped):
+        in_marketplaces = True
+        marketplaces_indent = get_indent(line)
+        continue
+    
+    # Exit marketplaces section if we hit another key at the same or lower indentation level
+    # This handles keys like mcpServers: that are siblings of pluginMarketplaces:
+    if in_marketplaces:
+        current_indent = get_indent(line)
+        # Check if this is a YAML key (contains colon) at same/lower indentation as pluginMarketplaces
+        if current_indent <= marketplaces_indent and re.match(r'\w+:', stripped) and not stripped.startswith('-'):
+            in_marketplaces = False
+            # Save last marketplace
+            if current_marketplace and current_marketplace.get('name'):
+                marketplaces.append(current_marketplace)
+                current_marketplace = None
+            # Don't break - continue processing other sections
+            continue
+    
+    if in_marketplaces:
+        # Detect start of new marketplace entry (- name: ...)
+        if re.match(r'-\s+name:', stripped):
+            # Save previous marketplace
+            if current_marketplace and current_marketplace.get('name'):
+                marketplaces.append(current_marketplace)
+            
+            # Start new marketplace
+            match = re.search(r'name:\s*(.+)', stripped)
+            current_marketplace = {
+                'name': match.group(1).strip().strip('"').strip("'") if match else None,
+                'source': None,
+                'branch': 'main',
+                'plugins': []
+            }
+            in_plugins = False
+            continue
+        
+        # Parse marketplace properties
+        if current_marketplace is not None:
+            # Source (git URL)
+            if re.match(r'^\s+source:', line):
+                match = re.search(r'source:\s*(.+)', stripped)
+                if match:
+                    current_marketplace['source'] = match.group(1).strip().strip('"').strip("'")
+            
+            # Branch
+            elif re.match(r'^\s+branch:', line):
+                match = re.search(r'branch:\s*(.+)', stripped)
+                if match:
+                    current_marketplace['branch'] = match.group(1).strip().strip('"').strip("'")
+            
+            # Plugins array
+            elif re.match(r'^\s+plugins:', line):
+                in_plugins = True
+                continue
+            
+            # Plugin list items (check for lines that start with whitespace + dash)
+            elif in_plugins and re.match(r'^\s+-', line) and not stripped.startswith('- name:'):
+                match = re.search(r'-\s+(.+)', stripped)
+                if match:
+                    plugin_name = match.group(1).strip().strip('"').strip("'")
+                    current_marketplace['plugins'].append(plugin_name)
+            
+            # Exit plugins section if we hit a non-list line (indented but not a dash)
+            elif in_plugins and not re.match(r'^\s+-', line) and stripped:
+                in_plugins = False
+
+# Add last marketplace
+if current_marketplace and current_marketplace.get('name'):
+    marketplaces.append(current_marketplace)
+
+print(json.dumps(marketplaces, indent=2))
+PYTHON_SCRIPT
+
+        if [ $? -eq 0 ] && [ -s "${output_file}" ]; then
+            return 0
+        fi
+    fi
+
+    # Fallback: return empty array
+    echo "[]" > "${output_file}"
+    return 1
+}
+
+# Clone a git marketplace repository
+# Usage: clone_marketplace source branch target_dir
+# Returns: 0 on success, 1 on failure
+clone_marketplace() {
+    local source=$1
+    local branch=$2
+    local target_dir=$3
+    
+    if [ -z "${source}" ] || [ -z "${target_dir}" ]; then
+        echo "       ERROR: Missing source or target directory for marketplace clone" >&2
+        return 1
+    fi
+    
+    # Default branch to main if not specified
+    if [ -z "${branch}" ]; then
+        branch="main"
+    fi
+    
+    # Check if git is available
+    if ! command -v git > /dev/null 2>&1; then
+        echo "       ERROR: git is not available for cloning marketplaces" >&2
+        return 1
+    fi
+    
+    # Remove target directory if it exists
+    if [ -d "${target_dir}" ]; then
+        rm -rf "${target_dir}"
+    fi
+    
+    # Create parent directory
+    mkdir -p "$(dirname "${target_dir}")"
+    
+    # Clone the repository
+    echo "       Cloning ${source} (branch: ${branch})..."
+    if git clone --depth 1 --branch "${branch}" "${source}" "${target_dir}" 2>/dev/null; then
+        echo "       Successfully cloned marketplace"
+        return 0
+    else
+        # Try without branch specification (for default branch)
+        echo "       Retrying clone with default branch..."
+        if git clone --depth 1 "${source}" "${target_dir}" 2>/dev/null; then
+            echo "       Successfully cloned marketplace (default branch)"
+            return 0
+        fi
+    fi
+    
+    echo "       ERROR: Failed to clone marketplace from ${source}" >&2
+    return 1
+}
+
+# Validate marketplace structure
+# Checks for expected plugin manifest files
+# Usage: validate_marketplace marketplace_dir
+# Returns: 0 if valid, 1 if invalid
+validate_marketplace() {
+    local marketplace_dir=$1
+    
+    if [ ! -d "${marketplace_dir}" ]; then
+        echo "       ERROR: Marketplace directory does not exist: ${marketplace_dir}" >&2
+        return 1
+    fi
+    
+    # Look for plugins directory or plugin manifests
+    local plugin_count=0
+    
+    # Check for plugins/ subdirectory (common structure)
+    if [ -d "${marketplace_dir}/plugins" ]; then
+        for plugin_dir in "${marketplace_dir}/plugins"/*; do
+            if [ -d "${plugin_dir}" ]; then
+                # Check for plugin.json or plugin.yml
+                if [ -f "${plugin_dir}/plugin.json" ] || [ -f "${plugin_dir}/plugin.yml" ] || [ -f "${plugin_dir}/plugin.yaml" ]; then
+                    plugin_count=$((plugin_count + 1))
+                fi
+            fi
+        done
+    fi
+    
+    # Also check root level for plugin directories
+    for plugin_dir in "${marketplace_dir}"/*; do
+        if [ -d "${plugin_dir}" ] && [ "$(basename "${plugin_dir}")" != "plugins" ]; then
+            if [ -f "${plugin_dir}/plugin.json" ] || [ -f "${plugin_dir}/plugin.yml" ] || [ -f "${plugin_dir}/plugin.yaml" ]; then
+                plugin_count=$((plugin_count + 1))
+            fi
+        fi
+    done
+    
+    if [ ${plugin_count} -eq 0 ]; then
+        echo "       WARNING: No valid plugins found in marketplace" >&2
+        # Don't fail - marketplace might have different structure
+        return 0
+    fi
+    
+    echo "       Found ${plugin_count} plugin(s) in marketplace"
+    return 0
+}
+
+# Find a plugin directory within a marketplace
+# Usage: find_plugin_in_marketplace marketplace_dir plugin_name
+# Outputs: path to plugin directory (or empty if not found)
+find_plugin_in_marketplace() {
+    local marketplace_dir=$1
+    local plugin_name=$2
+    
+    # Check plugins/ subdirectory first
+    if [ -d "${marketplace_dir}/plugins/${plugin_name}" ]; then
+        echo "${marketplace_dir}/plugins/${plugin_name}"
+        return 0
+    fi
+    
+    # Check root level
+    if [ -d "${marketplace_dir}/${plugin_name}" ]; then
+        echo "${marketplace_dir}/${plugin_name}"
+        return 0
+    fi
+    
+    # Not found
+    return 1
+}
+
+# Install a plugin from a marketplace to the application
+# Usage: install_plugin plugin_source_dir target_plugins_dir plugin_name
+# Returns: 0 on success, 1 on failure
+install_plugin() {
+    local plugin_source_dir=$1
+    local target_plugins_dir=$2
+    local plugin_name=$3
+    
+    if [ ! -d "${plugin_source_dir}" ]; then
+        echo "       ERROR: Plugin source directory not found: ${plugin_source_dir}" >&2
+        return 1
+    fi
+    
+    # Create target directory
+    local target_plugin_dir="${target_plugins_dir}/${plugin_name}"
+    mkdir -p "${target_plugin_dir}"
+    
+    # Copy plugin files
+    if cp -r "${plugin_source_dir}"/* "${target_plugin_dir}/" 2>/dev/null; then
+        echo "       Installed plugin: ${plugin_name}" >&2
+        return 0
+    else
+        echo "       ERROR: Failed to install plugin: ${plugin_name}" >&2
+        return 1
+    fi
+}
+
+# Install all specified plugins from a marketplace
+# Usage: install_marketplace_plugins marketplace_dir plugins_json target_plugins_dir
+# plugins_json is a JSON array of plugin names
+# Returns: number of successfully installed plugins
+install_marketplace_plugins() {
+    local marketplace_dir=$1
+    local plugins_json=$2
+    local target_plugins_dir=$3
+    
+    if [ ! -d "${marketplace_dir}" ]; then
+        echo "       ERROR: Marketplace directory not found" >&2
+        return 0
+    fi
+    
+    # Create target plugins directory
+    mkdir -p "${target_plugins_dir}"
+    
+    local installed_count=0
+    
+    # Parse plugin names from JSON array using Python
+    if command -v python3 > /dev/null 2>&1; then
+        local plugin_names=$(python3 -c "import json; plugins=${plugins_json}; print('\n'.join(plugins))" 2>/dev/null)
+        
+        while IFS= read -r plugin_name; do
+            if [ -n "${plugin_name}" ]; then
+                # Find plugin in marketplace
+                local plugin_source=$(find_plugin_in_marketplace "${marketplace_dir}" "${plugin_name}")
+                
+                if [ -n "${plugin_source}" ] && [ -d "${plugin_source}" ]; then
+                    if install_plugin "${plugin_source}" "${target_plugins_dir}" "${plugin_name}"; then
+                        installed_count=$((installed_count + 1))
+                    fi
+                else
+                    echo "       WARNING: Plugin not found in marketplace: ${plugin_name}" >&2
+                fi
+            fi
+        done <<< "${plugin_names}"
+    else
+        echo "       WARNING: Python3 not available for parsing plugin list" >&2
+    fi
+    
+    echo "${installed_count}"
+}
+
+# Extract skills from a plugin to the skills directory
+# This is a workaround for GitHub issue #10113 where Claude Code
+# incorrectly resolves skill paths for git-installed marketplace plugins
+# Usage: extract_plugin_skills plugin_dir target_skills_dir plugin_name
+# Returns: number of skills extracted
+extract_plugin_skills() {
+    local plugin_dir=$1
+    local target_skills_dir=$2
+    local plugin_name=$3
+    
+    if [ ! -d "${plugin_dir}" ]; then
+        return 0
+    fi
+    
+    local extracted_count=0
+    
+    # Check for skills/ directory within the plugin
+    local plugin_skills_dir="${plugin_dir}/skills"
+    if [ ! -d "${plugin_skills_dir}" ]; then
+        # Also check for skill/ (singular)
+        plugin_skills_dir="${plugin_dir}/skill"
+    fi
+    
+    if [ ! -d "${plugin_skills_dir}" ]; then
+        # No skills directory in this plugin
+        return 0
+    fi
+    
+    # Create target skills directory
+    mkdir -p "${target_skills_dir}"
+    
+    # Copy each skill directory
+    for skill_dir in "${plugin_skills_dir}"/*; do
+        if [ -d "${skill_dir}" ]; then
+            local skill_name=$(basename "${skill_dir}")
+            local target_skill_dir="${target_skills_dir}/${skill_name}"
+            
+            # Avoid overwriting existing skills
+            if [ -d "${target_skill_dir}" ]; then
+                echo "       WARNING: Skill already exists, skipping: ${skill_name}" >&2
+                continue
+            fi
+            
+            # Copy skill directory
+            if cp -r "${skill_dir}" "${target_skill_dir}" 2>/dev/null; then
+                # Validate the skill has SKILL.md
+                if [ -f "${target_skill_dir}/SKILL.md" ]; then
+                    echo "       Extracted skill from plugin ${plugin_name}: ${skill_name}" >&2
+                    extracted_count=$((extracted_count + 1))
+                else
+                    echo "       WARNING: Skill missing SKILL.md, removing: ${skill_name}" >&2
+                    rm -rf "${target_skill_dir}"
+                fi
+            fi
+        fi
+    done
+    
+    echo "${extracted_count}"
+}
+
+# Extract skills from all installed plugins
+# Usage: extract_all_plugin_skills plugins_dir skills_dir
+# Returns: total number of skills extracted
+extract_all_plugin_skills() {
+    local plugins_dir=$1
+    local skills_dir=$2
+    
+    if [ ! -d "${plugins_dir}" ]; then
+        echo "0"
+        return 0
+    fi
+    
+    local total_extracted=0
+    
+    for plugin_dir in "${plugins_dir}"/*; do
+        if [ -d "${plugin_dir}" ]; then
+            local plugin_name=$(basename "${plugin_dir}")
+            local extracted=$(extract_plugin_skills "${plugin_dir}" "${skills_dir}" "${plugin_name}")
+            total_extracted=$((total_extracted + extracted))
+        fi
+    done
+    
+    echo "${total_extracted}"
+}
+
+# Main plugin marketplace configuration function
+# Parses config, clones marketplaces, installs plugins, and extracts skills
+# Usage: configure_plugin_marketplaces build_dir deps_dir index
+configure_plugin_marketplaces() {
+    local build_dir=$1
+    local deps_dir=$2
+    local index=$3
+    
+    echo "-----> Configuring Plugin Marketplaces"
+    
+    # Check for config file
+    local config_file="${build_dir}/.claude-code-config.yml"
+    if [ ! -f "${config_file}" ]; then
+        echo "       No configuration file found, skipping marketplace configuration"
+        return 0
+    fi
+    
+    # Parse plugin marketplaces from config
+    local marketplaces_json_file="${build_dir}/.claude-marketplaces-temp.json"
+    if ! parse_plugin_marketplaces "${config_file}" "${marketplaces_json_file}"; then
+        echo "       No plugin marketplaces configured"
+        rm -f "${marketplaces_json_file}"
+        return 0
+    fi
+    
+    # Check if we have any marketplaces
+    local marketplace_count=$(python3 -c "import json; data=json.load(open('${marketplaces_json_file}')); print(len(data))" 2>/dev/null || echo "0")
+    if [ "${marketplace_count}" -eq 0 ]; then
+        echo "       No plugin marketplaces configured"
+        rm -f "${marketplaces_json_file}"
+        return 0
+    fi
+    
+    echo "       Found ${marketplace_count} plugin marketplace(s) to configure"
+    
+    # Set up directories
+    local marketplaces_cache_dir="${deps_dir}/${index}/plugins/marketplaces"
+    local app_plugins_dir="${build_dir}/.claude/plugins"
+    local app_skills_dir="${build_dir}/.claude/skills"
+    
+    mkdir -p "${marketplaces_cache_dir}"
+    mkdir -p "${app_plugins_dir}"
+    mkdir -p "${app_skills_dir}"
+    
+    local total_plugins_installed=0
+    local total_skills_extracted=0
+    
+    # Process each marketplace using a temp file to avoid subshell variable scope issues
+    local marketplace_list_file="${build_dir}/.claude-marketplace-list-temp.txt"
+    python3 -c "
+import json
+import sys
+
+with open('${marketplaces_json_file}') as f:
+    marketplaces = json.load(f)
+
+for m in marketplaces:
+    # Output format: name|source|branch|plugin1,plugin2,...
+    plugins = ','.join(m.get('plugins', []))
+    print(f\"{m.get('name', '')}|{m.get('source', '')}|{m.get('branch', 'main')}|{plugins}\")
+" 2>/dev/null > "${marketplace_list_file}"
+
+    # Read from file instead of pipe to avoid subshell
+    while IFS='|' read -r name source branch plugins; do
+        if [ -z "${name}" ] || [ -z "${source}" ]; then
+            echo "       WARNING: Skipping invalid marketplace entry (missing name or source)"
+            continue
+        fi
+        
+        echo "       Processing marketplace: ${name}"
+        
+        # Clone the marketplace
+        local marketplace_dir="${marketplaces_cache_dir}/${name}"
+        if ! clone_marketplace "${source}" "${branch}" "${marketplace_dir}"; then
+            echo "       WARNING: Failed to clone marketplace: ${name}"
+            continue
+        fi
+        
+        # Install plugins
+        if [ -n "${plugins}" ]; then
+            # Convert comma-separated list to JSON array
+            local plugins_json=$(python3 -c "import json; print(json.dumps('${plugins}'.split(',')))" 2>/dev/null)
+            local installed=$(install_marketplace_plugins "${marketplace_dir}" "${plugins_json}" "${app_plugins_dir}")
+            total_plugins_installed=$((total_plugins_installed + installed))
+        fi
+    done < "${marketplace_list_file}"
+    
+    # Clean up temp file
+    rm -f "${marketplace_list_file}"
+    
+    # Extract skills from all installed plugins (workaround for #10113)
+    if [ -d "${app_plugins_dir}" ]; then
+        echo "       Extracting skills from installed plugins..."
+        local skills_extracted=$(extract_all_plugin_skills "${app_plugins_dir}" "${app_skills_dir}")
+        total_skills_extracted=$((total_skills_extracted + skills_extracted))
+    fi
+    
+    # Clean up temp file
+    rm -f "${marketplaces_json_file}"
+    
+    echo "       Plugin marketplace configuration complete"
+    echo "       Total plugins installed: ${total_plugins_installed}"
+    echo "       Total skills extracted: ${total_skills_extracted}"
+    
+    return 0
+}
